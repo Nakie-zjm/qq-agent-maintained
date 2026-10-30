@@ -894,7 +894,7 @@ c.section('13. 安全回归');
   });
 
   // ── 社区/市场代理接口：远端用假 fetch 顶替（绝不在测试里真连官网）──
-  // 假响应必须同时提供 json() 与 text()：community.js 走 text()，market.js 走 json()。
+  // 假响应必须同时提供 json() 与 text()：社区/市场已移除，这里保留两者以防其它模块走不同取值。
   const realFetch = globalThis.fetch;
   const fakeMarket = async (url, options = {}) => {
     const target = String(url);
@@ -939,41 +939,7 @@ c.section('13. 安全回归');
       assert.ok(p.data.ok, 'POST 应成功');
     });
 
-    await c.check('市场代理：登录保存凭据 + 账号列表 + 登出清空', async () => {
-      const login = await hit('POST', '/api/market/login', {
-        body: JSON.stringify({ loginId: 'tester', password: 'secret-word', mode: 'login' }),
-        headers: { 'content-type': 'application/json' }
-      });
-      assert.equal(login.status, 200, `登录应 200，实际 ${login.status}：${JSON.stringify(login.data)}`);
-      assert.equal(login.data.ok, true, '登录应 ok');
-      const accounts = await hit('GET', '/api/market/accounts');
-      assert.equal(accounts.status, 200);
-      assert.ok(accounts.data.accounts.some((a) => a.username === '测试者' || a.username === 'tester'), `账号列表应含刚登录的账号，实际 ${JSON.stringify(accounts.data.accounts)}`);
-      const out = await hit('POST', '/api/market/logout', {
-        body: JSON.stringify({ username: accounts.data.accounts[0].username }),
-        headers: { 'content-type': 'application/json' }
-      });
-      assert.equal(out.status, 200, `登出应 200，实际 ${out.status}：${JSON.stringify(out.data)}`);
-      const after = await hit('GET', '/api/market/accounts');
-      assert.equal(after.data.accounts.filter((a) => a.username === accounts.data.accounts[0].username).length, 0, '登出后凭据应被移除');
-    });
-
-    // verify / publish：远端返回明确错误 → 502 透传（覆盖"失败也结构化"分支）
-    await c.check('POST /api/market/verify：远端 404 → 502 透传', async () => {
-      const r = await hit('POST', '/api/market/verify', {
-        body: JSON.stringify({ codes: ['ABCDEF'] }),
-        headers: { 'content-type': 'application/json' }
-      });
-      assert.equal(r.status, 502, `远端失败应 502 透传，实际 ${r.status}：${JSON.stringify(r.data)}`);
-    });
-
-    await c.check('POST /api/market/publish：缺 file → 400/502 且不落盘', async () => {
-      const r = await hit('POST', '/api/market/publish', {
-        body: JSON.stringify({}),
-        headers: { 'content-type': 'application/json' }
-      }).catch((e) => ({ status: 0, data: { error: String(e.message) } }));
-      assert.ok(r.status === 400 || r.status === 502, `缺文件应结构化报错（400/502），实际 ${r.status}：${JSON.stringify(r.data)}`);
-    });
+    // 市场代理（/api/market/*）已随原作者服务器下线整体移除。
   } finally {
     globalThis.fetch = realFetch;
   }
