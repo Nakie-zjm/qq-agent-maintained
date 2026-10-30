@@ -104,21 +104,32 @@ function createMockOneBotHttp() {
 }
 
 function createMockOneBotWs() {
-  const state = { client: null, events: [] };
+  // ⚠️ OneBot v11 的 WS 服务端（SnowLuma 的 role=Universal）允许**多个客户端同时连接**，
+  // 并把同一份事件流广播给所有客户端。这里如果只记住"最后一个连接"，插件自己再开一条
+  // WS（例如 qq-global 的好友申请旁路）就会把 client 指针抢走 —— 事件全推给插件，
+  // 被测的 app 一条也收不到，表现成"消息完全不触发"。state.client 保留给旧断言用。
+  const state = { client: null, clients: new Set(), events: [] };
   const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' });
   const ready = new Promise((r) => wss.once('listening', r));
-  wss.on('connection', (socket) => { state.client = socket; });
+  wss.on('connection', (socket) => {
+    state.client = socket;
+    state.clients.add(socket);
+    socket.on('close', () => {
+      state.clients.delete(socket);
+      if (state.client === socket) state.client = null;
+    });
+  });
   return {
     server: wss,
     state,
     async ready() { await ready; return wss.address().port; },
     push(event) {
       state.events.push(event);
-      if (state.client && state.client.readyState === WebSocket.OPEN) {
-        state.client.send(JSON.stringify(event));
-      } else {
-        throw new Error('Mock OneBot WS 尚无客户端连接');
+      let sent = 0;
+      for (const c of state.clients) {
+        if (c.readyState === WebSocket.OPEN) { c.send(JSON.stringify(event)); sent += 1; }
       }
+      if (!sent) throw new Error('Mock OneBot WS 尚无客户端连接');
     },
     close() { return new Promise((r) => wss.close(r)); }
   };
