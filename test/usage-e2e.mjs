@@ -1,3 +1,4 @@
+import './_isolate.mjs';   // 先隔离扩展目录，再加载被测模块
 // 真实端到端：起真服务，**不 mock 任何接口**，
 // 用 vm 加载 ui/app.js，走完整的 switchTab('usage') → loadUsageView 流程，
 // 验证页面真的有内容。这是最接近用户实际操作的验证。

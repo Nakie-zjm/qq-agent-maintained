@@ -79,11 +79,26 @@ snowluma/      SnowLuma 运行时——不入库
 npm test
 ```
 
-当前 **22 / 25 套通过**。3 套已知红灯，均为上游遗留问题，与本副本的改动无关：
+当前 **25 / 25 全部通过**。
 
-- `test/selftest.mjs`：端到端链路在"第一次 LLM 调用"处超时
-- `test/wake-semantics-test.mjs`：9 条唤醒 / 批处理语义断言失败
-- `test/tools-skill-audit.mjs`：需要本机存在自定义技能时才全绿（本副本不带技能）
+测试默认把 `skills/` 与 `plugins/` 指向**空的临时目录**（`test/_isolate.mjs`，
+底层是 `QQ_AGENT_SKILLS_DIR` / `QQ_AGENT_PLUGINS_DIR` 两个环境变量），
+所以结果只取决于代码本身，不会被本机自装的扩展干扰。
+
+想用**真实扩展**跑测试（会受你装的插件/技能影响）：
+
+```bat
+set QQ_AGENT_SKILLS_DIR=D:\software\QQ-agent\skills
+set QQ_AGENT_PLUGINS_DIR=D:\software\QQ-agent\plugins
+npm test
+```
+
+审查本机扩展是否自洽（清单、能力声明、工具 JSON Schema、孤儿能力等）：
+
+```bash
+node test/tools-skill-audit.mjs          # 审查真实 skills/ 与 plugins/
+node test/tools-skill-audit.mjs --hermetic   # 空目录（npm test 用的就是它）
+```
 
 ## 已知限制
 

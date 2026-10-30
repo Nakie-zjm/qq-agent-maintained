@@ -1,3 +1,4 @@
+import './_isolate.mjs';   // 先隔离扩展目录，再加载被测模块
 // 测试脚手架（供 coverage-*.mjs 复用）
 //
 // 复用 test/selftest.mjs 的 mock 模式：

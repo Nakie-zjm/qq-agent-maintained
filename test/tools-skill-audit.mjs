@@ -23,6 +23,18 @@ import { fileURLToPath } from 'node:url';
 // 跑 npm script 时碰巧能过，换个工作目录直接 ENOENT 崩掉 —— 表现为
 // "审查脚本自己出错"，让人以为是代码有问题。
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// 扩展目录：默认看仓库里的 skills/ 与 plugins/；测试链用 --hermetic 指到临时空目录，
+// 避免这台机器上自装的扩展让审查结果漂移。手动审查自己的扩展时不要加该参数。
+if (process.argv.includes('--hermetic')) {
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'qq-agent-audit-empty-'));
+  process.env.QQ_AGENT_SKILLS_DIR = path.join(empty, 'skills');
+  process.env.QQ_AGENT_PLUGINS_DIR = path.join(empty, 'plugins');
+}
+const ROOTS = {
+  skills: process.env.QQ_AGENT_SKILLS_DIR || path.join(APP_ROOT, 'skills'),
+  plugins: process.env.QQ_AGENT_PLUGINS_DIR || path.join(APP_ROOT, 'plugins')
+};
 const relOf = (p) => path.relative(APP_ROOT, p).replace(/\\/g, '/');
 
 process.env.QQ_AGENT_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'qq-agent-audit-'));
@@ -282,7 +294,7 @@ async function main() {
     let manifest = null;
     for (const mf of ['skill.json', 'plugin.json']) {
       try {
-        manifest = JSON.parse(fs.readFileSync(path.join(APP_ROOT, s.dir, mf), 'utf8'));
+        manifest = JSON.parse(fs.readFileSync(path.join(ROOTS[s.dir] || APP_ROOT, s.dir, mf), 'utf8'));
         break;
       } catch { /* 换下一个文件名 */ }
     }
@@ -344,7 +356,7 @@ async function main() {
     const bomFiles = [];
     const schemaProblems = [];
     for (const dir of ['skills', 'plugins']) {
-      const base = path.join(APP_ROOT, dir);
+      const base = ROOTS[dir];
       if (!fs.existsSync(base)) continue;
       for (const name of fs.readdirSync(base)) {
         // 两种清单文件名都要看：skills/ 用 skill.json、plugins/ 用 plugin.json。
@@ -413,7 +425,7 @@ async function main() {
     // 收集所有技能/插件的源码（用于判断"有没有模块消费这个能力"）
     const moduleSrc = [];
     for (const dir of ['skills', 'plugins']) {
-      const base = path.join(APP_ROOT, dir);
+      const base = ROOTS[dir];
       if (!fs.existsSync(base)) continue;
       for (const name of fs.readdirSync(base)) {
         const f = path.join(base, name, 'index.js');
@@ -512,7 +524,7 @@ async function main() {
     const offenders = [];
     const scanDirs = ['plugins', 'skills'];
     for (const d of scanDirs) {
-      const base = path.join(APP_ROOT, d);
+      const base = ROOTS[d];
       if (!fs.existsSync(base)) continue;
       for (const name of fs.readdirSync(base)) {
         const dir = path.join(base, name);

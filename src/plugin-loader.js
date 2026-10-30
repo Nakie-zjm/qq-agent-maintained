@@ -38,8 +38,10 @@ import { skillErrorText } from './skills/errors.js';
 // **静默加载 0 个**（既不报错也不打日志，排查成本极高）。
 // 项目内其它模块（app.js 的 UI_DIR、config.js 的 ROOT）都是同一约定。
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SKILLS_DIR = path.resolve(APP_ROOT, 'skills');
-const PLUGINS_DIR = path.resolve(APP_ROOT, 'plugins');
+// 扩展目录可用环境变量覆盖：测试靠它把 skills/ 与 plugins/ 指到空的临时目录，
+// 否则本机自装的扩展会混进单元/集成测试，让断言结果取决于"这台机器上装了什么"。
+const SKILLS_DIR = path.resolve(process.env.QQ_AGENT_SKILLS_DIR || path.join(APP_ROOT, 'skills'));
+const PLUGINS_DIR = path.resolve(process.env.QQ_AGENT_PLUGINS_DIR || path.join(APP_ROOT, 'plugins'));
 
 /**
  * 旧插件清单的 prompt 是 `{ when, examples[], instruction }` 形态，

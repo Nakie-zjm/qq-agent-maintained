@@ -1,3 +1,4 @@
+import './_isolate.mjs';   // 先隔离扩展目录，再加载被测模块
 // 端到端审计：mock OneBot（WS 收事件 + HTTP 发送）+ mock OpenAI 兼容 API，
 // 完整跑一遍核心需求流程，逐项断言。不触碰真实 QQ / 真实模型。
 //
