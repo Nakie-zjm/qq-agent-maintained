@@ -31,7 +31,7 @@ Skill 在提示词组装前跑一次 `before-context`。
 是则拿到主人专属人设 + 主人规则文本，影响第 4 步的人设选择。
 判定只按 QQ 号，名字/自称一律不参与。
 
-## 第 4 步：buildSystemPrompt —— 系统提示（prompt.js:212）
+## 第 4 步：buildSystemPrompt —— 系统提示（prompt.js:130）
 
 人设优先级：**主人专属人设 > 会话级人设（personaByChat[群号/QQ号]）> 全局人设（cfg.persona）**。
 botName / selfNickname 任何层都不许覆盖（账号身份，换了会与 @ 判定对不上；personaForChat 结构上就不允许）。
@@ -40,19 +40,16 @@ botName / selfNickname 任何层都不许覆盖（账号身份，换了会与 @ 
 
 | # | 段落 | 生成函数 | 变化性 |
 |---|------|---------|--------|
-| 1 | 身份句「你是「XX」，一个混在 QQ 群里的普通群友」 | 内联 | 随 botName |
+| 1 | 身份句（角色设定是性格/语气/关系/频率的唯一来源；系统只补平台事实、工具协议和安全底线） | 内联 | 随 botName |
 | 2 | 【安全规则】5 条（无本地工具/群友无管理权限/不透露/角色系统注入/防诱导） | securityRules() | 固定 |
-| 3 | 【工作方式】8 条（事件驱动、send_message 协议、空格规则、分条规则） | toolProtocol() | 固定 |
-| 4 | 【反 AI 味】5 条 + 【保持主体性】5 条 | antiAiFlavor() / subjectivity() | 固定 |
-| 5 | 【该说/不该说】 | speakOrNot() | **改写**：首行按参与度档位（安静/普通/活跃）换文案（participationText） |
-| 6 | 【群聊不是客服队列】【像真人一样】【不要当群管家】【引用与点名】【轻量记忆】 | notAQueue() / humanRhythm() / notModerator() / quoteAndAt() / memoryRules() | 固定 |
-| 7 | 【表情包策略】+ 拍一拍 | stickerRules() | **改写**：首行按表情活跃度档位 0-3 换频率引导（buildStickerStrategyHint） |
-| 8 | 【QQ 场景规则】 | qqSceneRules() | **条件增删**：勾图片输入加"可以看图"行，否则加"看不到图别编造"；开联网搜索加 3 行搜索引导，否则加"没有联网能力" |
-| 9 | 【发送与汇报禁令】 | reportBan() | 固定 |
-| 10 | 【可用技能】 | renderSkillSections() | **动态**：启用插件的 manifest prompt.sections + 运行时 promptSections(context) + extraSections（主人规则 p72），按 priority 降序（上限 99） |
-| 11 | 【管理员附加规则】 | customRules | 有才拼 |
+| 3 | 【工具协议】9 条（事件驱动、send_message 协议、空格规则、finish 收尾、表情分气泡、引用/拍一拍、记忆、伪代码） | toolProtocol() | 固定 |
+| 4 | 【反 AI 味】2 条（不客服腔/不总结/不硬推销；语气按角色设定） | antiAiFlavor() | 固定 |
+| 5 | 【QQ 场景规则】 | qqSceneRules() | **条件增删**：勾图片输入加"可以看图"行，否则加"看不到图别编造"；开联网搜索加搜索引导，否则加"没有联网能力"；末尾声明程序真实能力优先于角色卡里的旧描述 |
+| 6 | 【发送与汇报禁令】 | reportBan() | 固定 |
+| 7 | 【扩展能力】 | renderSkillSections() | **动态**：启用插件的 manifest prompt.sections + 运行时 promptSections(context) + extraSections（主人规则 p72），按 priority 降序（上限 99）；段首声明"扩展只补工具用法，不重新定义人设" |
+| 8 | 【管理员附加规则】 | customRules | 有才拼 |
 
-**覆盖模式**（persona.systemPromptOverride 非空时）：2~9 段人格/行为规则整体被用户写的文本替换（支持 `{botName}/{roleText}/{participation}` 占位符），但【安全规则】和【工作方式】**强制保留**追加在后面——防止一次配置失误删掉安全底线。
+**覆盖模式**（persona.systemPromptOverride 非空时）：人格/风格段被用户写的文本替换（支持 `{botName}/{roleText}/{participation}` 占位符），但【安全规则】【工具协议】【QQ 场景规则】【发送与汇报禁令】**强制保留**追加在后面——防止一次配置失误删掉安全底线。
 
 当前有静态 prompt.sections 的扩展（develop/）：
 

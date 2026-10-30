@@ -939,7 +939,7 @@ c.section('13. prompt.js 提示词组装');
   await c.check('buildSystemPrompt：包含人设与安全规则等核心模块', () => {
     const sys = buildSystemPrompt();
     assert.ok(typeof sys === 'string' && sys.length > 200, '系统提示不应为空');
-    for (const kw of ['安全规则', '工作方式']) {
+    for (const kw of ['安全规则', '工具协议']) {
       assert.ok(sys.includes(kw), `系统提示缺少「${kw}」`);
     }
     assert.ok(sys.includes('覆盖机'), '应包含机器人名');
