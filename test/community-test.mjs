@@ -22,7 +22,10 @@ fs.writeFileSync(path.join(dataDir, 'config.json'), JSON.stringify({
   server: { port: 3399 }
 }));
 
-// ── 假服务端：内存名单 + 鉴权语义与 community_app.py 对齐 ──
+// ── 假服务端：内存名单 + 鉴权语义与社区后端对齐 ──
+// 本维护副本默认把社区接口留空（不连原作者服务器），测试里用环境变量指到假地址；
+// fetch 已被全局 mock，不会真的出网。
+process.env.QQ_AGENT_COMMUNITY_API = 'https://community.test/api/community';
 const cloud = { ids: new Set(), requireKeyForReplace: 'community-secret' };
 let postedAdd = 0;
 globalThis.fetch = async (url, options = {}) => {
@@ -94,7 +97,7 @@ await check('固定价格表 URL 不接受配置覆盖', async () => {
   updateConfig({ api: { priceRemoteUrl: 'https://evil.example.com/prices.json' } });
   const status = priceFeedStatus();
   assert.equal(status.url, community.FIXED_PRICE_FEED_URL, '状态里的 URL 必须是固定官网地址');
-  assert.equal(community.FIXED_PRICE_FEED_URL, 'https://kondius.cn/qq-agent/model-prices.json', '固定地址不应被改动（且必须是 https：价格表会落盘覆盖内置表，明文可被 MITM 篡改成本展示）');
+  assert.equal(community.FIXED_PRICE_FEED_URL, '', '本维护副本默认关闭远程价格表（不连接作者服务器；可用 QQ_AGENT_PRICE_FEED_URL 自建）');
   setPriceFeedTestUrl('');
   await refreshPriceFeed('https://evil.example.com/prices.json').catch(() => {});
   assert.equal(priceFeedStatus().url, community.FIXED_PRICE_FEED_URL, '即使调用方传别的地址也不能改写生效地址');

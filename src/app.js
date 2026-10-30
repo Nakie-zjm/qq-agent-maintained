@@ -54,9 +54,10 @@ function allowed(kind, id, cfg) {
 }
 
 // ── 版本更新检查 ─────────────────────────────────────────────────────
-// 线上版本信息只有一份：kondius.cn/qq-agent/version.json（发版时手动改）。
+// 本维护副本不连接原作者服务器：默认关闭更新检查（UPDATE_INFO_URL 为空 = 接口直接返回"已停用"）。
+// 需要自建版本信息时，用环境变量 QQ_AGENT_UPDATE_URL 指向自己的 https 地址（JSON 形如 {version,url,notes}）。
 // 由后端代取而不是前端直连：绕过 CORS，且失败信息能统一回给 UI。
-const UPDATE_INFO_URL = 'https://kondius.cn/qq-agent/version.json';
+const UPDATE_INFO_URL = String(process.env.QQ_AGENT_UPDATE_URL || '').trim();
 
 function localVersion() {
   try {
@@ -652,7 +653,7 @@ export function createApp({ log = console.log } = {}) {
 
   // 云端统一屏蔽名单：启动先用 data 缓存，后台同步；网络失败不影响本地拦截。
   const communitySyncTimer = startCommunitySync(log);
-  communitySyncTimer.unref?.();
+  communitySyncTimer?.unref?.();
 
   // OneBot 连接状态推送
   onebot.onStatus((status) => emit('onebot-status', status));
@@ -1408,8 +1409,8 @@ export function createApp({ log = console.log } = {}) {
       try {
         const data = fs.readFileSync(fullPath);
         const ext = path.extname(fullPath);
-        // jpg/jpeg/webp/gif/ico：设置页群二维码彩蛋（group-qrcode.jpg）与
-        // 市场页图片要用 —— 曾经只认 png/svg，jpg 会以 octet-stream 下载而非显示
+        // jpg/jpeg/webp/gif/ico：ui/ 下的图片与市场页图片要用 ——
+        // 曾经只认 png/svg，jpg 会以 octet-stream 下载而非显示
         const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
         const headers = { 'content-type': types[ext] ?? 'application/octet-stream', 'cache-control': 'no-cache' };
         if (ext === '.html') {
@@ -1418,18 +1419,19 @@ export function createApp({ log = console.log } = {}) {
           // ⚠️ script-src 与 index.html 的 meta 版本同款（sha256 hash 精确放行
           //    首屏主题预置脚本，不含 unsafe-inline）—— 两处口径必须一致，
           //    否则 meta 被剥离的场景下 unsafe-inline 立即生效。
-          // 2026-09-26：验证码 SDK 需要动态加载 o.alicdn.com（及 kondius.cn 反代）、
-          //    XHR 到 *.aliyuncs.com —— 与 meta 版本同步放行；**meta 与 HTTP 头两份
-          //    CSP 浏览器取交集执行，只改一处等于没改**（本次 alicdn 加载失败即漏改此处）。
+          // 2026-09-26：验证码 SDK 需要动态加载 o.alicdn.com 与 XHR 到 *.aliyuncs.com
+          //    —— 与 meta 版本同步放行；**meta 与 HTTP 头两份 CSP 浏览器取交集执行，
+          //    只改一处等于没改**（本次 alicdn 加载失败即漏改此处）。
+          // 本维护副本已移除原作者服务器（kondius.cn）的反代，故不再放行该域。
           headers['content-security-policy'] = [
             "default-src 'self'",
-            "script-src 'self' 'sha256-xBF5qExTuqfXHlYtKYaaldGJshQgQOr5zvcGHjbPL7w=' https://o.alicdn.com https://kondius.cn",
+            "script-src 'self' 'sha256-xBF5qExTuqfXHlYtKYaaldGJshQgQOr5zvcGHjbPL7w=' https://o.alicdn.com",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: http: https:",
             "media-src 'self' data: blob:",
-            "connect-src 'self' https://kondius.cn https://*.aliyuncs.com https://*.alicdn.com",
-            "frame-src https://*.aliyuncs.com https://*.alicdn.com https://kondius.cn",
-            "worker-src 'self' blob: https://*.alicdn.com https://kondius.cn",
+            "connect-src 'self' https://*.aliyuncs.com https://*.alicdn.com",
+            "frame-src https://*.aliyuncs.com https://*.alicdn.com",
+            "worker-src 'self' blob: https://*.alicdn.com",
             "font-src 'self' data:",
             "object-src 'none'",
             "base-uri 'none'",

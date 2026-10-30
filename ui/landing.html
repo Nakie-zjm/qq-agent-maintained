@@ -16,7 +16,7 @@
   })();
 </script>
 <!-- ⚠️ 部署注意（2026-09-14 踩过坑）：
-     本文件是线上 kondius.cn/qq-agent 的落地页，依赖站点统一主题包
+     本文件原先是线上 kondius.cn/qq-agent 的落地页（作者站点已下线，本副本仅留档），依赖站点统一主题包
      /assets/theme.css + /assets/theme.js 提供：流动背景 / 极光 / 粒子连线 /
      鼠标拖尾 / 波浪点击 / 滚动入场 / 备案页脚。
      曾经把"自包含版"直接覆盖到线上，整套站点特效当场消失 —— 别再这么干。
@@ -157,12 +157,7 @@ html.no-theme.dark body { background: #0d1726; }
 <nav class="nav"><div class="wrap nav-inner">
   <div class="brand">QQ <span>Agent</span></div>
   <div class="nav-btns">
-    <a class="nav-pill p-primary" href="/qq-agent/comments" target="_blank" rel="noopener">意见箱</a>
-    <a class="nav-pill p-primary" href="/qq-agent/holyshits" target="_blank" rel="noopener">雷霆语录</a>
-    <a class="nav-pill p-primary" href="/qq-agent/skill-market/">Skill 市场</a>
-    <a class="nav-pill p-accent" href="/qq-agent/persona-plaza/">人设广场</a>
-    <button class="nav-pill p-accent" type="button" id="groupQrBtn">官方交流群</button>
-    <a class="nav-pill p-sm" href="https://kondius.cn" target="_blank" rel="noopener">作者的博客？！</a>
+    <span class="nav-pill p-sm">本维护副本已停用原作者站点的社区入口</span>
   </div>
 </div></nav>
 
@@ -233,19 +228,6 @@ html.no-theme.dark body { background: #0d1726; }
 </div></footer>
 
 <script>
-// ── 大肥鱼群二维码：点任意位置关闭 ──
-(function () {
-  document.getElementById('groupQrBtn').addEventListener('click', function () {
-    const ov = document.createElement('div');
-    ov.className = 'qr-overlay';
-    ov.innerHTML = '<img src="group-qrcode.jpg" alt="大肥鱼群二维码" />';
-    ov.addEventListener('click', function () { ov.remove(); });
-    document.body.appendChild(ov);
-  });
-})();
-</script>
-
-<script>
 // 实时总览：匿名遥测聚合。token 用 万/亿 缩写，失败或没人用时整条隐藏。
 // 工具元数据与程序内 ui/app.js 的 TOOL_META 保持一致（图标/中文名/分类）。
 const TOOL_META = {
@@ -276,7 +258,8 @@ const TOOL_CAT_ORDER = ['发言', '查看', '表情', '记忆', '联网', '其�
     return String(n);
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-  fetch('https://kondius.cn/qq-agent/api/telemetry/summary')
+  // 本维护副本：原作者服务器（kondius.cn）已下线，线上统计不再拉取。
+  Promise.reject(new Error('telemetry summary disabled in this fork'))
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (!d.ok || !d.users) return;

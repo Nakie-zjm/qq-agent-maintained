@@ -6,7 +6,9 @@ import { DATA_DIR, ROOT, getConfig, updateConfig, FIXED_PRICE_REMOTE_URL } from 
 
 export const FIXED_PRICE_FEED_URL = FIXED_PRICE_REMOTE_URL;
 const COMMUNITY_KEY_FILE = path.join(ROOT, 'community.key');
-export const COMMUNITY_API_BASE = 'https://www.kondius.cn/api/community';
+// 本维护副本不连接原作者的社区服务：默认留空 = 云端共享屏蔽名单与社区接口全部停用，
+// 只保留本地黑名单。需要自建时用环境变量 QQ_AGENT_COMMUNITY_API 指向自己的接口。
+export const COMMUNITY_API_BASE = String(process.env.QQ_AGENT_COMMUNITY_API || '').trim();
 /**
  * 云端名单写入密钥（只有"删除/整体覆盖"用得到）。
  * 优先级：环境变量 QQ_AGENT_COMMUNITY_KEY（显式设为空 = 明确不用密钥）> 项目根 community.key。
@@ -53,6 +55,8 @@ function writeCache(ids) {
 }
 
 async function request(pathname, options = {}) {
+  // 本维护副本默认不连原作者服务器：base 为空时直接拒绝，绝不拼出相对 URL 去 fetch。
+  if (!COMMUNITY_API_BASE) throw new Error('社区服务已停用（本维护副本不连接原作者服务器）');
   const key = communityWriteKey();
   const headers = { accept: 'application/json', 'content-type': 'application/json', ...(options.headers || {}) };
   if (key && options.method && options.method !== 'GET') headers['X-Community-Key'] = key;
@@ -192,6 +196,9 @@ export async function updateGlobalBlocklist(ids, { mode = 'replace' } = {}) {
 }
 
 export function startCommunitySync(log = console.warn) {
+  // 本维护副本默认没有社区服务（COMMUNITY_API_BASE 为空）：不启动同步，
+  // 否则每 5 分钟会打一条"同步失败"日志，纯噪音。
+  if (!COMMUNITY_API_BASE) return null;
   getGlobalBlocklist();
   syncGlobalBlocklist({ pushLocal: true }).catch((e) => log('[community] 云端屏蔽名单同步失败:', e?.message ?? e));
   return setInterval(() => {

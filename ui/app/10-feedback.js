@@ -25,19 +25,10 @@ function _captchaFailAll(msg) {
   q.forEach((cb) => cb(new Error(msg)));
 }
 
-// Service Worker：把渲染层对 aliyuncs/alicdn 的请求改写到 kondius.cn 实时反代。
-// 仅在本机 Chromium 网络栈被压制的机器上才实际起作用；正常机器上 SW 静默无副作用。
-// SW 文件由本地 server 提供（ui/captcha-sw.js，同源，secure context 成立）。
+// 本维护副本：原作者用 Service Worker 把 aliyuncs/alicdn 请求改写到 kondius.cn 的反代。
+// 这里既不连接原作者的服务器，验证码上传通道（意见箱 / 金句）也已停用，因此不再注册 SW。
 async function _ensureCaptchaSW() {
-  if (!('serviceWorker' in navigator)) { window.__qqaSWStatus = 'SW不支持'; return; }
-  try {
-    await navigator.serviceWorker.register('/captcha-sw.js');
-    await navigator.serviceWorker.ready;   // 激活后再加载 SDK，保证拦截已生效
-    window.__qqaSWStatus = 'SW已激活';
-  } catch (e) {
-    window.__qqaSWStatus = `SW注册失败:${String(e && e.message || e).slice(0, 60)}`;
-    console.warn('[captcha] SW 注册失败（将按原路径直连）', e);
-  }
+  window.__qqaSWStatus = 'SW已停用（本维护副本）';
 }
 
 function _captchaStart() {
@@ -49,11 +40,8 @@ function _captchaStart() {
     .catch(() => {})
     .then(() => {
       const s = document.createElement('script');
-      // SDK 主脚本走 kondius.cn 同域反代（nginx 实时透传 o.alicdn.com，不缓存）：
-      // 部分用户机器上 Chromium 访问 *.alicdn.com 失败但 kondius.cn 可达（2026-09-26 实测）。
-      // SDK 内部的接口请求全在 aliyuncs.com 域（已解析源码确认，无 alicdn 后续资源），
-      // 由 captcha-sw.js 改写走 kondius.cn；CSP 的 connect-src 已放行两族域名。
-      s.src = 'https://kondius.cn/qq-agent/captcha-sdk/AliyunCaptcha.js';
+      // 本维护副本：不再走原作者的反代，直接向阿里云 CDN 取 SDK（CSP 已放行 o.alicdn.com）。
+      s.src = 'https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js';
       s.onload = () => {
         try {
           window.initAliyunCaptcha({
@@ -255,13 +243,12 @@ function _installCaptchaReqHook() {
   } catch { /* 忽略 */ }
 }
 
-// 多目标连通性探测：mode:'no-cors' 下 resolve 即网络通（opaque 响应也算通），
-// 用 kondius.cn（意见箱一直在用的域）和两个 alicdn 域做对照。
+// 多目标连通性探测：mode:'no-cors' 下 resolve 即网络通（opaque 响应也算通）。
+// 本维护副本已移除原作者服务器的对照目标，只保留阿里云两族域。
 async function _captchaProbeNet() {
   const targets = [
-    ['kondius.cn(SDK反代)', 'https://kondius.cn/qq-agent/captcha-sdk/AliyunCaptcha.js'],
     ['aliyuncs(验签域)', 'https://captcha.cn-shanghai.aliyuncs.com/'],
-    ['kondius.cn(接口)', 'https://kondius.cn/api/community/health'],
+    ['aliyuncs-open', 'https://163stu.captcha-open.aliyuncs.com/'],
   ];
   const out = [];
   for (const [name, url] of targets) {
@@ -482,6 +469,8 @@ function fbCompressImage(file) {
 }
 
 function openFeedbackModal() {
+  // 本维护副本：意见箱依赖作者服务器，已停用（见 09-community.js 的 forkDisabledNotice）。
+  if (!FORK_COMMUNITY_ENABLED) { forkDisabledNotice('意见收集'); return; }
   const draft = fbLoadDraft();
   const state2 = { images: draft.images.slice() };   // 弹窗内的图片列表（dataURL）
 
@@ -490,7 +479,7 @@ function openFeedbackModal() {
     body: `
       <div id="fb-form">
         <div class="hint" style="flex-shrink:0">
-          昵称和意见会上传到作者的服务器（kondius.cn/qq-agent/comments 公开展示）。
+          （本维护副本已停用意见收集：原作者服务器已下线，弹窗仅供查看本地草稿。）
           内容实时保存在本机，误点弹窗外面也不会丢。
         </div>
         <div class="field"><label>昵称</label>
@@ -632,7 +621,7 @@ function openFeedbackModal() {
       if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
       localStorage.removeItem(FB_DRAFT_KEY);   // 上传成功才清草稿
       closeModelModal(overlay);
-      showUploadToast('意见已上传，感谢反馈！', 'https://kondius.cn/qq-agent/comments');
+      showUploadToast('意见已上传，感谢反馈！', '');
     } catch (err) {
       hint.textContent = `上传失败：${err.message}（内容已保存在本机，可稍后再试）`;
       submitBtn.disabled = false;
@@ -644,7 +633,8 @@ function openFeedbackModal() {
 // Electron 里 window.open 会被 main.js 的 setWindowOpenHandler 转给系统默认浏览器；
 // 开发模式（纯浏览器）则正常开新标签页。
 function openSite() {
-  window.open('https://kondius.cn/qq-agent', '_blank', 'noopener');
+  if (!FORK_COMMUNITY_ENABLED) { forkDisabledNotice('项目网站'); return; }
+  window.open('', '_blank', 'noopener');
 }
 
 // ── 自动检查更新 ──
@@ -712,6 +702,7 @@ function syncQuoteButtons() {
 }
 
 function enterQuoteMode() {
+  if (!FORK_COMMUNITY_ENABLED) { forkDisabledNotice('金句上传'); return; }
   state.quoteMode = true;
   state.quoteSelected = new Set();
   syncQuoteButtons();
@@ -747,7 +738,7 @@ function openQuoteConfirmModal() {
     head: '确认上传金句',
     body: `
       <div class="hint">将上传 ${picked.length} 条消息（含机器人 ${botCount} 条），
-        来自「${esc(chatName)}」，公开展示在 kondius.cn/qq-agent/holyshits。</div>
+        来自「${esc(chatName)}」。</div>
       <div class="field"><label>昵称（收录人）</label>
         <input type="text" id="q-nickname" maxlength="32" placeholder="怎么称呼你" value="${esc(lastNickname)}" /></div>
       <div style="max-height:320px;overflow-y:auto;border:none;border-radius:10px;padding:10px;font-size:12.5px;box-shadow:var(--press-sm)">
@@ -841,7 +832,7 @@ async function doUploadQuote(nickname, picked, captchaVerifyParam, overlay, hint
     localStorage.setItem('qqa-quote-nickname', nickname);
     closeModelModal(overlay);
     exitQuoteMode();
-    showUploadToast('金句已收录！', 'https://kondius.cn/qq-agent/holyshits');
+    showUploadToast('金句已收录！', '');
   } catch (err) {
     hint.textContent = `上传失败：${err.message}`;
     overlay.querySelector('#q-submit').disabled = false;
@@ -851,9 +842,9 @@ async function doUploadQuote(nickname, picked, captchaVerifyParam, overlay, hint
 // 顶栏按钮绑定
 $('#feedback-btn')?.addEventListener('click', () => openFeedbackModal());
 $('#open-site-btn')?.addEventListener('click', () => openSite());
-$('#skill-market-btn')?.addEventListener('click', () => window.open('https://www.kondius.cn/qq-agent/skill-market/', '_blank', 'noopener'));
-$('#plugin-market-btn')?.addEventListener('click', () => window.open('https://www.kondius.cn/qq-agent/plugin-market/', '_blank', 'noopener'));
-$('#persona-plaza-btn')?.addEventListener('click', () => window.open('https://www.kondius.cn/qq-agent/persona-plaza/', '_blank', 'noopener'));
+$('#skill-market-btn')?.addEventListener('click', () => forkDisabledNotice('Skill 市场'));
+$('#plugin-market-btn')?.addEventListener('click', () => forkDisabledNotice('插件市场'));
+$('#persona-plaza-btn')?.addEventListener('click', () => forkDisabledNotice('人设广场'));
 $('#quote-btn')?.addEventListener('click', () => {
   if (state.quoteMode) exitQuoteMode(); else enterQuoteMode();
 });

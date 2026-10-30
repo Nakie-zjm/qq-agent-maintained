@@ -16,7 +16,15 @@ import path from 'node:path';
 import { ROOT, DATA_DIR, getConfig } from './config.js';
 import { logger } from './logger.js';
 
-export const MARKET_API_BASE = 'https://www.kondius.cn/api/community';
+// 本维护副本不连接原作者的社区服务：默认留空 = 市场（登录/发布/口令安装）全部停用。
+// 需要自建时用环境变量 QQ_AGENT_MARKET_API 指向自己的接口。
+export const MARKET_API_BASE = String(process.env.QQ_AGENT_MARKET_API || '').trim();
+
+/** base 为空时一律拒绝，避免拼出相对 URL 去 fetch（会直接抛 Invalid URL）。 */
+function marketBase() {
+  if (!MARKET_API_BASE) throw new Error('市场功能已停用（本维护副本不连接原作者服务器）');
+  return MARKET_API_BASE;
+}
 const ACCOUNT_FILE = path.join(DATA_DIR, 'account.json');
 const FETCH_TIMEOUT_MS = 30000;
 // 安装包下载上限与后端 MAX_UPLOAD 对齐
@@ -87,7 +95,7 @@ function friendlyMarketError(res) {
  * @param {object} options { method, token, json, body(headers 自动), timeoutMs }
  */
 export async function marketFetch(pathname, { method = 'GET', token = '', json = null, body = null, headers = {}, timeoutMs = FETCH_TIMEOUT_MS } = {}) {
-  const res = await fetch(`${MARKET_API_BASE}${pathname}`, {
+  const res = await fetch(`${marketBase()}${pathname}`, {
     method,
     headers: {
       ...(json !== null ? { 'content-type': 'application/json' } : {}),
@@ -151,7 +159,7 @@ export async function publishModule({ kind, id, displayName, description, token,
   if (description) form.append('description', String(description));
   // 阿里云验证码验签：远端强制校验，一次性 token（前端弹出人机验证后拿到）
   if (captchaVerifyParam) form.append('captchaVerifyParam', String(captchaVerifyParam));
-  const res = await fetch(`${MARKET_API_BASE}/market/publish`, {
+  const res = await fetch(`${marketBase()}/market/publish`, {
     method: 'POST',
     headers: token ? { 'X-Account-Token': token } : {},
     body: form,
@@ -292,7 +300,7 @@ export async function installByCode({ code, verified }) {
   const type = String(entry?.type || '').toLowerCase() === 'plugin' ? 'plugin' : 'skill';
   // 先下载（没传 verified 也重新校验一次拿 type —— 不信任何本地猜测）
   const ident = entry?.id;
-  const res = await fetch(`${MARKET_API_BASE}/install/${encodeURIComponent(String(code).trim().toUpperCase())}/download`, {
+  const res = await fetch(`${marketBase()}/install/${encodeURIComponent(String(code).trim().toUpperCase())}/download`, {
     signal: AbortSignal.timeout(120000)
   });
   if (!res.ok) {

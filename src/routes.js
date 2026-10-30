@@ -1109,6 +1109,10 @@ export function createRoutes(deps) {
       method: 'GET', pattern: '/api/update-check',
       handler: async ({ res, json }) => {
         const current = localVersion();
+        // 本维护副本默认关闭更新检查（UPDATE_INFO_URL 为空）。
+        if (!UPDATE_INFO_URL) {
+          return json(res, 200, { ok: false, current, disabled: true, error: '更新检查已停用（本维护副本不连接原作者服务器）' });
+        }
         try {
           const r = await fetch(UPDATE_INFO_URL, { signal: AbortSignal.timeout(8000), cache: 'no-store' });
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -1118,7 +1122,7 @@ export function createRoutes(deps) {
           return json(res, 200, {
             ok: true, current, latest,
             hasUpdate: compareSemver(latest, current) > 0,
-            url: String(info.url || 'https://kondius.cn/qq-agent'),
+            url: String(info.url || ''),
             notes: String(info.notes || '')
           });
         } catch (error) {

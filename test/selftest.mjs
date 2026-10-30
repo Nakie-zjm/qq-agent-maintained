@@ -1365,9 +1365,9 @@ refs:
     const mp = await get('/api/model-prices');
     assert.ok(mp.remote && typeof mp.remote.enabled === 'boolean', 'model-prices 应带 remote 状态');
     const rr = await (await fetch(`http://127.0.0.1:${cfg.server.port}/api/model-prices/refresh`, { method: 'POST' })).json();
-    assert.ok(rr.remote, 'refresh 接口应返回 remote 状态（固定官网 URL）');
-    assert.equal(rr.remote.enabled, true, '生产价格表地址固定，刷新接口应保持启用');
-    assert.equal(rr.remote.url, 'https://kondius.cn/qq-agent/model-prices.json', '价格表 URL 必须固定为官网地址（https，防 MITM 篡改成本展示）');
+    assert.ok(rr.remote, 'refresh 接口应返回 remote 状态');
+    assert.equal(rr.remote.enabled, false, '本维护副本默认关闭远程价格表（不连接作者服务器）');
+    assert.equal(rr.remote.url, '', '默认不带远程价格表地址（可用 QQ_AGENT_PRICE_FEED_URL 自建）');
 
     pass('远程价格表：四种格式解析 + 覆盖优先级 + 失败不清表 + 接口齐全');
   }

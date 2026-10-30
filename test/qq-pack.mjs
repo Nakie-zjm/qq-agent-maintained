@@ -136,8 +136,8 @@ check(/portable-info\.json/.test(setup), '解压后读清单核对版本');
 // 两个地址的环境变量必须分开 —— 之前手滑写成同一个，
 // 用户设 QQ_PORTABLE_URL 时会把安装包地址也一起改掉
 {
-  const m1 = setup.match(/const QQ_X64_URL = process\.env\.(\w+)/);
-  const m2 = setup.match(/const QQ_PORTABLE_URL = \(process\.env\.(\w+)/);
+  const m1 = setup.match(/const QQ_X64_URL = String\(process\.env\.(\w+)/);
+  const m2 = setup.match(/const QQ_PORTABLE_URL = String\(process\.env\.(\w+)/);
   check(m1 && m2 && m1[1] !== m2[1],
     `安装包与免安装包用不同的环境变量（${m1?.[1]} / ${m2?.[1]}）`);
   check(m2 && m2[1] === 'QQ_PORTABLE_URL', '免安装包用 QQ_PORTABLE_URL');

@@ -48,7 +48,6 @@ ipcMain.handle('qqa-captcha-net-probe', async () => {
     ['node:o.alicdn.com', 'https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js'],
     ['node:aliyuncs验签', 'https://captcha.cn-shanghai.aliyuncs.com/'],
     ['node:aliyuncs-open', 'https://163stu.captcha-open.aliyuncs.com/'],
-    ['node:kondius.cn', 'https://kondius.cn/api/community/health'],
   ];
   const out = [];
   for (const [name, url] of targets) {
@@ -275,25 +274,10 @@ app.whenReady().then(async () => {
     // 应用只访问本机回环地址：强制直连，防止系统代理（Clash/加速器等）劫持 127.0.0.1 导致白/黑屏
     await session.defaultSession.setProxy({ mode: 'direct' });
     // ── 验证码域重定向（2026-09-26）──
-    // 部分用户机器上 Chromium 网络栈访问 *.alicdn.com / *.aliyuncs.com 被本机
-    // 安全软件按进程+域名压制（同机 Node 层与系统 curl 均正常），而 kondius.cn 可达。
-    // 在 session 层把这两族域的请求重定向到 kondius.cn 的白名单反代：
-    //   /qq-agent/captcha-sdk/...  （SDK 主脚本）
-    //   /qq-agent/captcha-api/...  （SDK 接口，nginx 按域名后缀转发到真实域）
-    // webRequest 覆盖主文档/iframe/worker/XHR 的所有请求形态，比 Service Worker 可靠。
-    // 只匹配这两族域名后缀（正则收尾锚定），其余请求一律放行。
-    captchaInterceptorActive = true;
-    session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-      try {
-        const m = /^https:\/\/([a-zA-Z0-9.-]+\.(?:aliyuncs|alicdn)\.com)(\/.*)$/.exec(details.url);
-        if (m) {
-          return callback({
-            redirectURL: `https://kondius.cn/qq-agent/captcha-api/${m[1]}${m[2]}`
-          });
-        }
-      } catch { /* 解析异常按放行处理 */ }
-      callback({});
-    });
+    // ── 验证码域重定向（本维护副本已移除）──
+    // 原作者把 *.alicdn.com / *.aliyuncs.com 的请求重定向到 kondius.cn 的白名单反代。
+    // 本副本不连接原作者服务器，且依赖验证码的上传功能（意见箱 / 金句上传）已停用，
+    // 因此不再安装该重定向（captchaInterceptorActive 保持 false，不拦截任何请求）。
     bootDiag('setProxy 完成');
     console.log('[window] 代理模式：direct（绕过系统代理）');
     const { createApp } = await import('../src/app.js');

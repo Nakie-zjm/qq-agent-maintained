@@ -1,7 +1,7 @@
 # QQ Agent（桌面端）
 ![平台](https://img.shields.io/badge/platform-Windows%20%7C%20Electron-lightgrey)
 ![技术栈](https://img.shields.io/badge/stack-Node.js%20%7C%20原生前端-orange)
-![测试](https://img.shields.io/badge/tests-24%20suites%20%E2%80%89620%2B%20assertions-brightgreen)
+![测试](https://img.shields.io/badge/tests-23%2F26%20suites%20passing-yellowgreen)
 一个跑在你自己电脑上的 QQ 群聊机器人：装完双击启动，扫码登录，填个模型 Key 就能用。
 事件驱动 + 无状态会话架构，每次处理的 token 成本恒定可控；所有操作都在图形控制台里完成，不用碰命令行。
 从 [Derpyu520/qq-bridge](https://github.com/Derpyu520/qq-bridge) 彻底改造而来的独立 QQ agent 应用。
@@ -13,6 +13,31 @@
 > 维护范围：只修自己实际遇到的问题，**不保证**及时响应 issue、**不保证**兼容性、**不保证**跟进新功能。想要长期有支持的项目，请另寻仍在活跃维护的实现。
 > 许可：代码沿用 **MIT**（见 [LICENSE](LICENSE)），版权归原作者 **Kondius** 所有，原始版权声明必须保留；"仿真群友"的整体思路来自 [Derpyu520/qq-bridge](https://github.com/Derpyu520/qq-bridge)（MIT）。
 > 本仓库不含原使用者本地的插件、技能、个人人设、真实 QQ 号 / 群号、API Key 与聊天记录，克隆下来是干净的基线版本；完整声明见 [NOTICE.md](NOTICE.md)。
+
+## 与原版的差异（本维护副本）
+
+原作者的服务器（`kondius.cn`）已随上游一起下线，本副本**完全断开**了对它的依赖。
+
+**已停用的在线功能**（点击只会提示「已停用」）：
+
+- 意见收集 / 金句上传 / 技能市场 / 插件市场 / 人设广场 / 官网入口
+- 匿名用量遥测、云端共享屏蔽名单同步、远程价格表、自动更新检查
+- 阿里云验证码（仅那些上传功能使用）
+
+**已从仓库移除**：作者的 QQ 群二维码、社区后端源码（原 `server/`）、作者专用的发布 workflow、AI 工具忽略文件。
+
+**完全不受影响的**：QQ 收发、人设与提示词、记忆、表情包、插件 / 技能系统、本地黑名单、内置价格表、图形控制台。
+
+**如果你自建了对应服务**，用环境变量指回去即可（默认全部为空 = 不启用）：
+
+| 环境变量 | 作用 |
+| --- | --- |
+| `QQ_AGENT_COMMUNITY_API` | 社区接口（云端屏蔽名单） |
+| `QQ_AGENT_MARKET_API` | 技能 / 插件市场接口 |
+| `QQ_AGENT_TELEMETRY_URL` | 匿名用量遥测上报地址 |
+| `QQ_AGENT_PRICE_FEED_URL` | 远程价格表（https） |
+| `QQ_AGENT_UPDATE_URL` | 版本更新信息（JSON：`{version,url,notes}`） |
+| `QQ_AGENT_COMMUNITY_KEY` | 云端屏蔽名单的管理写密钥（可选）|
 
 ## 能实现什么
 - **像真人一样混群**：被 @ 或被叫到时回话，平时看心情插嘴；会发文字、表情包、戳一戳，会引用、会 @ 人，知道什么时候该闭嘴
@@ -102,10 +127,10 @@ plugins/my-plugin/            skills/my-skill/
 ## 安装与使用
 **三步搞定**（推荐）：
 ```bash
-git clone https://github.com/K0nd1us/QQ-agent.git
-cd qq-agent
+git clone https://github.com/Nakie-zjm/qq-agent-maintained.git
+cd qq-agent-maintained
 npm install
-npm run setup    # 自动下载 SnowLuma + 固定版本便携 QQ
+npm run setup    # 检查 SnowLuma / 便携 QQ（本副本不内置下载地址，需自备安装包）
 ```
 然后双击 `启动QQ机器人.bat`（或 `npm start`），在 SnowLuma 页签点「启动 QQ」，扫码登录即可。
 **手动安装**（如果 `npm run setup` 下载失败）：
@@ -113,7 +138,7 @@ npm run setup    # 自动下载 SnowLuma + 固定版本便携 QQ
 2. **装便携 QQ**（可选）：
    - **最省事**：机器上已经装过 QQ 的话，**先完全退出 QQ**，直接跑 `npm run setup` ——
      脚本会从注册表找到已装的 QQ 并复制一份到 `runtime/qq-portable/`（约 1.6 GB，会自动跳过聊天记录）
-   - 否则：下载 <https://www.kondius.cn/netdisk/api/download/QQ_9.9.33_260813_x64_01.exe>
+   - 否则：自行从官方 <https://im.qq.com/index/#/windows> 下载 QQ 安装包（本维护副本不提供镜像），
      （约 300 MB），**正常双击安装一遍**，然后退出 QQ、重跑 `npm run setup`
    - 为什么不能自动静默安装：QQ 9.9.x 用的是腾讯自研的 **HummerSetup** 安装器，
      不接受 NSIS/Inno 的静默开关（脚本会识别出来并说明，而不是盲试到超时）
@@ -197,8 +222,8 @@ npm run setup -- --no-portable
   - 改之前备份成 `snowluma/index.mjs.orig`；需要还原就把它盖回去
   - 关掉对齐：`set QQ_ALIGN_CLIENT_BUILD=0 && npm run setup`
   - 之所以做在 setup 里而不是手改：`snowluma/` 是下载来的，重新 setup 会覆盖掉手改的改动
-- **下载源**：从 <https://www.kondius.cn/netdisk/api/download/> 取安装包
-  （不依赖腾讯 CDN 的文件名规则，也不会因 CDN 清档而 404）。
+- **下载源**：默认不内置下载地址（本维护副本不连接原作者网盘）。自行从官方
+  <https://im.qq.com/index/#/windows> 下载安装包，或用 `QQ_INSTALLER_URL` 指向自己的镜像/本地文件。
   目标版本 `9.9.33.51802`（免安装包里的就是这一版）。
 - **完整性校验**：安装包的 SHA256 已固定（`B25C0D3C…EC492`，2026-09-13 实测下载并校验）。
   换版本/换源时要**同步改掉它**，否则每次 setup 都会以"校验失败"告终；

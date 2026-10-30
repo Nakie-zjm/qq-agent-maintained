@@ -1049,7 +1049,7 @@ my-skill.zip
 
 ### 13.2 上传
 
-打开 <https://www.kondius.cn/qq-agent/skill-market/> → 「上传 Skill ZIP」。
+本维护副本已停用线上技能市场（原作者服务器已下线），改为本地分发：把 `skills/<id>/` 打包成 ZIP 发给对方解压即可。
 
 对应接口：`POST /api/community/skills/upload`（multipart，字段名 `file`）。
 

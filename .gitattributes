@@ -1,0 +1,19 @@
+# 统一换行符：仓库里一律用 LF 存储，检出时按平台转换。
+# Windows 上 git 默认 autocrlf=true，会把 .bat 也转成 CRLF，导致每次 git add
+# 都刷一堆 "LF will be replaced by CRLF" 警告 —— 这里显式声明，行为可预期。
+* text=auto eol=lf
+
+# Windows 批处理必须保持 CRLF，否则 cmd 解析异常
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件不要做换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.zip binary
+*.exe binary
+*.dll binary

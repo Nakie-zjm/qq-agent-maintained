@@ -22,8 +22,9 @@ const check = (c, m, d) => (c ? ok(m) : bad(m, d));
 
 // ── 1) 下载源 ──
 check(!SRC.includes('dldir1v6.qq.com'), '不再使用腾讯 CDN 的 dldir1v6 地址');
-check(SRC.includes('https://www.kondius.cn/netdisk/api/download/'),
-  '下载源指向 kondius.cn 分发地址');
+check(!SRC.includes('netdisk/api/download'), '不内置原作者网盘镜像（本维护副本不连接作者服务器）');
+check(/QQ_X64_URL = String\(process\.env\.QQ_INSTALLER_URL \|\| ''\)\.trim\(\)/.test(SRC),
+  '安装包地址只由环境变量 QQ_INSTALLER_URL 提供，默认留空');
 check(!/QQ_PORTABLE_VERSION\s*\|\|\s*'9\.9\.26/.test(SRC),
   '默认 QQ 版本不再是 9.9.26（用户已要求换到 9.9.33）');
 
@@ -44,12 +45,7 @@ check(instName === 'QQ_9.9.33_260813_x64_01.exe',
 check(!/QQ_INSTALLER_NAME = `/.test(SRC),
   '安装包名不再由版本号拼接 —— 拼错的话兜底下载会 404，而报错只会说"下载失败"');
 const urlTpl = SRC.match(/QQ_X64_URL = process\.env\.QQ_INSTALLER_URL \|\|\s*\n?\s*`([^`]+)`/);
-check(!!urlTpl, '找得到 URL 模板');
-if (urlTpl) {
-  const built = urlTpl[1].replace(/\$\{QQ_INSTALLER_NAME\}/g, instName);
-  const want = `https://www.kondius.cn/netdisk/api/download/${instName}`;
-  check(built === want, '拼出的安装包地址正确', `实际: ${built}\n期望: ${want}`);
-}
+check(!urlTpl, '安装包地址不再内置 URL 模板（只认环境变量）');
 
 // ── 3) 目标版本与安装包是"两个产物"，不能混为一谈 ──
 check(ver !== '9.9.33.260813',

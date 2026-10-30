@@ -3,12 +3,33 @@
 /* ══════════════════════════════════════════════════════════════
    社区功能：意见收集 + 金句上传
    ══════════════════════════════════════════════════════════════
-   数据流向：浏览器 → https://kondius.cn/qq-agent/api（作者自建的公开
-   收件箱，静态站之外的一个小型接收服务）。不经过本地后端 ——
-   本地后端只服务本机，碰不到作者的服务器；分发版用户也是这个地址
-   （意见和金句本来就是发给作者看的）。
+   原作者的数据流向是：浏览器 → 作者自建的接收服务（kondius.cn），
+   不经过本地后端。原作者服务器已下线，本维护副本（qq-agent-maintained）
+   断开了这条链路：COMMUNITY_API 留空 + FORK_COMMUNITY_ENABLED = false，
+   相关入口统一走 forkDisabledNotice() 提示「已停用」，不再发任何请求。
 */
-const COMMUNITY_API = 'https://kondius.cn/qq-agent/api';
+// 本维护副本不连接原作者服务器：社区接口留空 = 相关功能统一走 forkDisabledNotice()。
+const COMMUNITY_API = '';
+
+/**
+ * 社区类在线功能（意见箱 / 金句上传 / 技能市场 / 插件市场 / 人设广场 / 项目网站）总开关。
+ * 原作者服务器已下线，本副本固定为 false；自建服务后改这里 + 下面的 COMMUNITY_API 即可。
+ */
+const FORK_COMMUNITY_ENABLED = false;
+
+/**
+ * 本维护副本已与原作者服务器断开：统一的「功能已停用」提示。
+ * 所有原来指向 kondius.cn 的入口（意见箱 / 金句 / 技能市场 / 插件市场 / 人设广场 / 项目网站）都走这里。
+ */
+function forkDisabledNotice(what) {
+  showNoticeModal('功能已停用（本维护副本）',
+    `${what}依赖原作者（Kondius）已经下线的在线服务，本维护副本 qq-agent-maintained 已移除该功能，不会连接到 kondius.cn。\n\n`
+    + '如果你自建了对应服务，可以用环境变量指回去：\n'
+    + '· 社区 / 市场：QQ_AGENT_COMMUNITY_API / QQ_AGENT_MARKET_API\n'
+    + '· 遥测：QQ_AGENT_TELEMETRY_URL\n'
+    + '· 远程价格表：QQ_AGENT_PRICE_FEED_URL\n'
+    + '· 更新检查：QQ_AGENT_UPDATE_URL');
+}
 
 /** 统一的提示小模态框（替代 alert —— 原生对话框与 UI 风格割裂）。 */
 function showNoticeModal(title, text) {
@@ -726,12 +747,11 @@ async function fetchMarketAccounts() {
 function openAddModuleModal(kind) {
   const isSkill = kind === 'skill';
   const name = isSkill ? '技能' : '插件';
-  // 双市场：技能页开 skill-market，插件页开 plugin-market（线上两个独立页面）
-  const marketUrl = `https://www.kondius.cn/qq-agent/${isSkill ? 'skill-market' : 'plugin-market'}/`;
+  // 本维护副本：线上市场（skill-market / plugin-market）已停用，入口只保留「自己造」。
   const overlay = modelModalShell({
     head: `添加${name}`,
     body: `
-      <div class="hint" style="margin-bottom:12px">两种来路：从市场捞现成的，或者自己造一个。</div>
+      <div class="hint" style="margin-bottom:12px">本维护副本已停用线上市场（原市场由作者服务器提供，现已下线），只能自己造一个。</div>
       <div class="addmod-stack">
         <button class="addmod-big" id="addmod-market">
           <span class="addmod-label">看看${name}市场</span>
@@ -746,8 +766,7 @@ function openAddModuleModal(kind) {
   });
   overlay.querySelector('#addmod-market')?.addEventListener('click', () => {
     closeModelModal(overlay);
-    window.open(marketUrl, '_blank', 'noopener');
-    openInstallCodeModal();
+    forkDisabledNotice('线上技能 / 插件市场与口令安装');
   });
   overlay.querySelector('#addmod-diy')?.addEventListener('click', () => {
     closeModelModal(overlay);
@@ -913,7 +932,7 @@ async function openMarketUploadModal(kind, moduleId) {
         <input type="password" id="mu-password2" autocomplete="new-password" /></div>`}
       <div class="hint" id="mu-login-msg" style="min-height:18px"></div>
       <div class="hint" style="margin-top:6px">
-        没有账号？<a href="https://www.kondius.cn/qq-agent/skill-market/" target="_blank" rel="noopener">前往官网注册</a>，
+        没有账号？账号体系已随原作者服务器下线，本维护副本无法注册。
         或直接<span class="link" id="mu-switch-mode">${isLogin ? '在这里注册' : '在这里登录'}</span>。
       </div>`,
       `<button class="btn btn-primary" id="mu-login-go">${isLogin ? '登录' : '注册并登录'}</button>
@@ -1038,7 +1057,7 @@ async function openMarketUploadModal(kind, moduleId) {
             ✅ 上传完成！<b>${esc(moduleId)}</b> 已进入<b>待审核</b>状态 ——
             审核通过后才会出现在市场，并生成「复制口令！」按钮。
           </div>
-          <div class="hint">可以关闭这个窗口，或去 <a href="https://www.kondius.cn/qq-agent/skill-market/" target="_blank" rel="noopener">市场页面</a> 看看进展。</div>`,
+          <div class="hint">可以关闭这个窗口（原作者的市场页面已下线，本副本无法查看审核进展）。</div>`,
           `<button class="btn" id="mu-done">知道了</button>`);
         overlay.querySelector('#mu-done')?.addEventListener('click', () => closeModelModal(overlay));
       } catch (e) {

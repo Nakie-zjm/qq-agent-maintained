@@ -151,12 +151,6 @@ await c.check('landing.html 的本地资源引用全部存在（曾经引用过�
   // 站级资源只校验路径前缀；与页面同目录的相对文件（如群二维码）必须本地存在。
   for (const u of localRefs(landing)) {
     if (/^\/(assets|vendor)\//.test(u)) continue;   // 站级资源，服务器侧存在
-    // 群二维码图片：随 ui/ 一起分发（设置页彩蛋与 landing 都引用它）。
-    if (u === 'group-qrcode.jpg') {
-      const p = path.join(ROOT, 'ui', u);
-      assert.ok(fs.existsSync(p), `landing.html 引用的群二维码不存在：${u}`);
-      continue;
-    }
     if (u.startsWith('/')) {
       assert.fail(`landing.html 不应引用其它本地根路径资源：${u}`);
     } else {

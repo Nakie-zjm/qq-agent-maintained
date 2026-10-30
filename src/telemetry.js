@@ -9,7 +9,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR, ROOT } from './config.js';
 
-const REPORT_URL = 'https://kondius.cn/qq-agent/api/telemetry';
+// 本维护副本不连接原作者服务器：默认不发遥测（REPORT_URL 为空 = 直接跳过）。
+// 需要统计时用环境变量 QQ_AGENT_TELEMETRY_URL 指向自己的 https 接口。
+const REPORT_URL = String(process.env.QQ_AGENT_TELEMETRY_URL || '').trim();
 const INTERVAL_MS = 6 * 3600 * 1000;   // 之后每 6 小时一次
 const FIRST_DELAY_MS = 90 * 1000;      // 启动 90 秒后发第一次（避开启动高峰）
 
@@ -75,6 +77,7 @@ function appVersion() {
 }
 
 export async function report(log) {
+  if (!REPORT_URL) return;       // 未配置上报地址 = 本副本默认行为：不上报
   const totals = loadTotals();   // 没有用量（含重建后仍为空）就不报
   if (!totals || !Number(totals.calls)) return;
   // 工具调用明细：只留 [a-z0-9_] 形态的键、整数次数，最多 50 个键

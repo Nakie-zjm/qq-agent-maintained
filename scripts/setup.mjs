@@ -70,8 +70,9 @@ const QQ_BUILD = QQ_VERSION.split('.').pop();
 // 这个包只在"免安装包拿不到 + 机器上也没装 QQ"时才用到（且必须手动双击安装，
 // 它是 HummerSetup，不支持静默安装）。
 const QQ_INSTALLER_NAME = process.env.QQ_INSTALLER_NAME || 'QQ_9.9.33_260813_x64_01.exe';
-const QQ_X64_URL = process.env.QQ_INSTALLER_URL ||
-  `https://www.kondius.cn/netdisk/api/download/${QQ_INSTALLER_NAME}`;
+// 本维护副本不连接原作者服务器：默认不提供下载地址（原先是 kondius.cn 的网盘镜像）。
+// 需要自动下载时用环境变量 QQ_INSTALLER_URL 指向自己的镜像，或手动下载后放进缓存目录。
+const QQ_X64_URL = String(process.env.QQ_INSTALLER_URL || '').trim();
 
 // ── QQ 免安装包（首选路径）────────────────────────────────────────────
 //
@@ -83,8 +84,7 @@ const QQ_X64_URL = process.env.QQ_INSTALLER_URL ||
 //
 // 打包命令：npm run pack:qq   （生成后在 dist/ 下，上传到分发地址）
 // 留空 QQ_PORTABLE_URL 则跳过这条路，退回"从已装的 QQ 复制"。
-const QQ_PORTABLE_URL = (process.env.QQ_PORTABLE_URL
-  || 'https://www.kondius.cn/netdisk/api/download/QQ_portable.zip').trim();
+const QQ_PORTABLE_URL = String(process.env.QQ_PORTABLE_URL || '').trim();
 // 换包时**必须同步更新**，否则会以"SHA256 校验失败"告终。
 // 打包脚本会把这两行直接打印出来，复制粘贴即可。
 const QQ_PORTABLE_SHA256 = (process.env.QQ_PORTABLE_SHA256
@@ -531,6 +531,13 @@ async function installQqPortable() {
 
   // 下载 QQ 安装包
   if (!fs.existsSync(installerPath)) {
+    if (!QQ_X64_URL) {
+      warn('未配置 QQ 安装包下载地址（本维护副本不连接原作者服务器，QQ_X64_URL 默认为空）。');
+      warn(`请手动下载 QQ 安装包后放到：${QQ_CACHE_DIR}`);
+      warn('官方下载页：https://im.qq.com/index/#/windows （版本不限，装完脚本会复制过来）');
+      warn('或用环境变量 QQ_INSTALLER_URL 指向你自己的镜像地址。');
+      die('未配置 QQ 安装包下载地址');
+    }
     try {
       const dl = await download(QQ_X64_URL, installerPath, {
         expectedSha256: QQ_X64_SHA256 || null,

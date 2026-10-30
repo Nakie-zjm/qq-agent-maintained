@@ -915,7 +915,8 @@ weather-query.zip
     └── README.md
 ```
 
-然后打开 <https://www.kondius.cn/qq-agent/skill-market/> → 点「上传 Skill ZIP」→ 选文件。
+本维护副本已停用线上技能市场（原作者服务器已下线）：要分享技能，直接把 `skills/<id>/` 打包成
+ZIP 发给对方，解压到 `skills/` 下即可。
 
 **上传的硬性要求**：
 
