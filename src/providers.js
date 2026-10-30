@@ -118,14 +118,39 @@ export function currentProviders() {
   return (cfg.providers || []).map((p) => withResolvedKey(p, cfg));
 }
 
-/** 给指定提供商设置 API Key（存进配置的 dshProviderKeys，不动 providers 数组）。 */
+/**
+ * 给指定提供商设置 / 清除 API Key（存进配置的 dshProviderKeys）。
+ *
+ * ⚠️ 清除必须走 `__replace__`：updateConfig 是深合并，普通传一个"删掉该 id 的
+ *    新对象"只会把其余键覆盖回去，被删的那个键仍留在配置里 —— 表现为点「清除密钥」
+ *    接口返回成功、刷新后 Key 还在，用户只能删掉提供商再重加（历史 bug）。
+ * ⚠️ 清除时还要抹掉 providers[].apiKey 的历史明文：providerKeyValue 会拿它兜底，
+ *    只删 dshProviderKeys 会出现"清了又回来"。
+ */
 export function setProviderKey(providerId, apiKey) {
+  const pid = String(providerId ?? '').trim();
   const key = String(apiKey ?? '').trim();
-  const keys = { ...(getConfig().dshProviderKeys || {}) };
-  if (key) keys[providerId] = key;
-  else delete keys[providerId];
-  updateConfig({ dshProviderKeys: keys });
-  return currentProviders().find((p) => p.id === providerId) || null;
+  const cfg = getConfig();
+  const keys = { ...(cfg.dshProviderKeys || {}) };
+  if (key) keys[pid] = key;
+  else delete keys[pid];
+
+  const patch = { dshProviderKeys: { __replace__: keys } };
+  if (!key) {
+    const providers = cfg.providers || [];
+    const idx = providers.findIndex((p) => p.id === pid);
+    if (idx >= 0 && String(providers[idx]?.apiKey ?? '').trim()) {
+      patch.providers = providers.map((p, i) => (i === idx ? { ...p, apiKey: '' } : p));
+    }
+    // 清的是"当前选中"提供商的 Key 时，顶层 api.apiKey 的遗留副本一并清掉：
+    // resolveApiKey 在该提供商没 Key 时会回落到它 —— 留着就会出现"界面显示已清除、
+    // 聊天却还拿着旧 Key 在跑"，用户以为没清掉（同一把 Key 存两处的历史遗留）。
+    if (String(cfg.api?.provider ?? '') === pid && String(cfg.api?.apiKey ?? '').trim()) {
+      patch.api = { apiKey: '' };
+    }
+  }
+  updateConfig(patch);
+  return currentProviders().find((p) => p.id === pid) || null;
 }
 
 // ── 手动管理提供商/模型（设置页“模型 API”） ──────────────────────────────

@@ -684,8 +684,10 @@ function bindSettingsEvents(c) {
   // ── 「模型配置」「模型管理」两个入口模态框（2026-09-18 改版）──
   // 原页面上的 模型目录/baseURL/Key/专用模型/图片视频开关/视频理解方式
   // 全部收进「模型配置」（mc-* 字段，弹窗内部自带绑定）；删除模型/手动添加
-  // 提供商收进「模型管理」。Key 的显示/清除都已搬进「模型配置」弹窗
-  // （mc-apikey-toggle / mc-apikey-clear，弹窗内自带绑定），旧绑定全部删除。
+  // 提供商收进「模型管理」。Key 的显示/替换/清除两个弹窗里都有
+  // （mc-apikey-* 与 mg-apikey-*，弹窗内自带绑定），旧绑定全部删除。
+  // 2026-10-30：mg-apikey 由 readonly 改为可直接填新 Key + 「保存密钥」——
+  // 以前换 Key 只能删掉提供商重加。
   $('#open-model-config-btn')?.addEventListener('click', () => openModelConfigModal());
   $('#open-model-manage-btn')?.addEventListener('click', () => openModelManageModal());
   // 拿当前 API Key 的真实值：如果输入框里是用户刚输入的新 Key（非掩码非空），优先用；否则向后端取

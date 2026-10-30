@@ -285,7 +285,7 @@ function openModelConfigModal() {
           <input type="text" id="mc-baseurl" readonly value="${esc(c.api?.baseUrl || '')}" /></div>
         <div class="field"><label>当前 API Key</label>
           <div style="display:flex;gap:8px">
-            <input type="password" id="mc-apikey" value="${esc((currentProvider?.hasKey || c.api?.apiKey) ? '******' : '')}" placeholder="输入新 Key 可替换；留空保持不变" autocomplete="new-password" style="flex:1" />
+            <input type="password" id="mc-apikey" value="${esc((currentProvider ? currentProvider.hasKey : Boolean(c.api?.apiKey)) ? '******' : '')}" placeholder="输入新 Key 可替换；留空保持不变" autocomplete="new-password" style="flex:1" />
             <button class="btn btn-small" id="mc-apikey-toggle" type="button">显示</button>
             <button class="btn btn-small btn-danger" id="mc-apikey-clear" type="button" title="清除已保存的 API Key（留空保存并不会清除，必须点这个按钮）">清除</button>
           </div></div>
@@ -517,10 +517,18 @@ function openModelConfigModal() {
     const dEl = overlay.querySelector('#mc-video-model-pick');
     if (vEl.dataset.model !== undefined || vEl.value === '') patch.visionModel = vEl.dataset.model || '';
     if (dEl.dataset.model !== undefined || dEl.value === '') patch.videoModel = dEl.dataset.model || '';
-    // Key：只在用户输入了非掩码明文时才回传（掩码/留空 = 保持）
+    // Key：只在用户输入了非掩码明文时才提交（掩码/留空 = 保持）。
+    // ⚠️ 有选中提供商时必须写进**该提供商的 Key**（/api/providers/set-key）：
+    //    resolveApiKey 的优先级是「提供商 Key > 顶层 api.apiKey」，写顶层会被提供商里
+    //    那把旧 Key 盖掉 —— 这正是"换了 Key 却一直用旧的、只能删提供商重加"的根因。
     const raw = (overlay.querySelector('#mc-apikey').value || '').trim();
-    if (raw && raw !== '******') patch.apiKey = raw;
+    const enteredKey = (raw && raw !== '******') ? raw : '';
+    const keyPid = String(c.api?.provider || '');
+    if (enteredKey && !keyPid) patch.apiKey = enteredKey;
     try {
+      if (enteredKey && keyPid) {
+        await api('/api/providers/set-key', { method: 'POST', body: JSON.stringify({ providerId: keyPid, apiKey: enteredKey }) });
+      }
       await api('/api/config', { method: 'POST', body: JSON.stringify({ api: patch }) });
       closeModelModal(overlay);
       loadSettings();
@@ -911,8 +919,9 @@ function openModelManageModal() {
       <div class="field"><label>Base URL</label>
         <input type="text" id="mg-baseurl" value="${esc(p.baseURL || '')}" readonly style="width:100%" /></div>
       <div class="field"><label>API Key</label>
-        <div style="display:flex;gap:8px">
-          <input type="password" id="mg-apikey" value="${esc(p.hasKey ? '******' : '')}" readonly placeholder="${p.hasKey ? '' : '（未保存）'}" style="flex:1" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="password" id="mg-apikey" value="${esc(p.hasKey ? '******' : '')}" placeholder="${p.hasKey ? '想换 Key：直接输入新 Key 后点「保存密钥」' : '输入 API Key 后点「保存密钥」'}" autocomplete="new-password" style="flex:1" />
+          <button class="btn btn-small btn-primary" id="mg-apikey-save" type="button" title="保存/替换这个提供商的 API Key">保存密钥</button>
           <button class="btn btn-small" id="mg-apikey-toggle" type="button">显示</button>
           <button class="btn btn-small btn-danger" id="mg-apikey-clear" type="button" title="清除已保存的 API Key">清除密钥</button>
         </div></div>
@@ -951,15 +960,35 @@ function openModelManageModal() {
         alert(`读取密钥失败：${e.message}`);
       }
     });
+    // Key 保存/替换（2026-10-30）：这个输入框以前是 readonly，想换 Key 只能
+    // 把整个提供商删掉重加（Key 存在 dshProviderKeys 里，没有别的入口）。
+    // 现在直接填新 Key 点「保存密钥」即可，走 /api/providers/set-key。
+    right.querySelector('#mg-apikey-save').addEventListener('click', async () => {
+      const input = right.querySelector('#mg-apikey');
+      const raw = String(input.value || '').trim();
+      if (!raw || raw === '******') {
+        alert('请先输入新的 API Key（掩码状态不会被保存）。');
+        return;
+      }
+      const btn = right.querySelector('#mg-apikey-save');
+      btn.disabled = true;
+      btn.textContent = '保存中…';
+      try {
+        await api('/api/providers/set-key', { method: 'POST', body: JSON.stringify({ providerId: p.id, apiKey: raw }) });
+        await refresh();
+      } catch (e) {
+        alert(`保存密钥失败：${e.message}`);
+        btn.disabled = false;
+        btn.textContent = '保存密钥';
+      }
+    });
     // Key 清除
     right.querySelector('#mg-apikey-clear').addEventListener('click', async () => {
       if (!p.hasKey) return;
       if (!(await uiConfirm(`确定清除「${p.displayName || p.id}」的 API Key？`))) return;
       try {
         await api('/api/providers/set-key', { method: 'POST', body: JSON.stringify({ providerId: p.id, apiKey: '' }) });
-        await loadSettings();
-        renderLeft();
-        renderRight();
+        await refresh();
       } catch (e) {
         alert(`清除失败：${e.message}`);
       }

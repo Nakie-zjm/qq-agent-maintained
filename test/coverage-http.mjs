@@ -359,6 +359,38 @@ c.section('5. 提供商 / 模型目录 / 搜索服务');
     }
   });
 
+  await c.check('POST /api/providers/set-key：清除密钥真的落盘（深合并删键回归）', async () => {
+    // 2026-10-30 回归：updateConfig 是深合并，旧实现传"删掉该 id 的新对象"根本删不掉
+    // dshProviderKeys 里的旧键 —— 接口回 200、hasKey 仍 true，UI 刷新后 Key 还在，
+    // 用户只能把提供商删掉重加才能换 Key。这里必须验到配置本体：键真的没了。
+    const { getConfig, updateConfig } = await import('../src/config.js');
+    await hit('POST', '/api/config', { body: { api: { provider: providerId } } });
+    // 历史遗留：同一把 Key 还可能在顶层 api.apiKey 存过一份，清除时必须一并清掉，
+    // 否则 resolveApiKey 会回落它 —— "界面清了、聊天还在用旧 Key"。
+    updateConfig({ api: { apiKey: 'shadow-legacy-key' } });
+    // 老配置还可能把明文存在 providers[].apiKey（providerKeyValue 的兜底来源）。
+    updateConfig({
+      providers: getConfig().providers.map((p) => (p.id === providerId ? { ...p, apiKey: 'legacy-plaintext' } : p))
+    });
+    const before = await hit('GET', '/api/providers');
+    assert.equal(before.data.providers.find((x) => x.id === providerId)?.hasKey, true, '清除前应显示已有 Key');
+
+    const cleared = await hit('POST', '/api/providers/set-key', { body: { providerId, apiKey: '' } });
+    assert.equal(cleared.status, 200);
+    assert.equal(cleared.data.hasKey, false, '清除后应回报 hasKey=false');
+
+    const cfg = getConfig();
+    assert.equal(cfg.dshProviderKeys?.[providerId], undefined, '配置里不应残留该提供商的 Key');
+    assert.equal(String(cfg.api?.apiKey ?? ''), '', '当前选中提供商的顶层遗留 Key 应一并清掉');
+    assert.equal(String(cfg.providers.find((p) => p.id === providerId)?.apiKey ?? ''), '', 'providers[].apiKey 的历史明文也应清掉');
+
+    const list = await hit('GET', '/api/providers');
+    assert.equal(list.data.providers.find((x) => x.id === providerId)?.hasKey, false, '提供商列表应显示无 Key');
+
+    // 还原 Key：后面的「拉取模型 / 批量测试」用例还要用它
+    await hit('POST', '/api/providers/set-key', { body: { providerId, apiKey: 'another-secret' } });
+  });
+
   await c.check('POST /api/providers/test-one：连通性测试返回结果', async () => {
     const r = await hit('POST', '/api/providers/test-one', {
       body: { providerId: '', baseUrl: `http://127.0.0.1:${llm.server.address().port}/v1`, apiKey: 'k' }
