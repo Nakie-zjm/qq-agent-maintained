@@ -440,21 +440,6 @@ function bindSettingsEvents(c) {
   // 批量自定义价格编辑
   $('#batch-price-btn')?.addEventListener('click', () => openBatchPriceModal());
 
-  // ── 远程价格表：状态展示 + 立即拉取 ──
-  renderPriceFeedStatus();
-  $('#price-feed-refresh-btn')?.addEventListener('click', async () => {
-    const statusEl = $('#price-feed-status');
-    if (statusEl) statusEl.textContent = '正在拉取官网价格表…';
-    try {
-      const r = await api('/api/model-prices/refresh', { method: 'POST', body: '{}' });
-      state.modelPrices = { prices: r.prices, current: r.current, remote: r.remote };
-      renderPriceFeedStatus();
-      refreshModelPriceCard();   // 价格可能变了，当前模型卡片跟着刷
-    } catch (e) {
-      if (statusEl) statusEl.textContent = `拉取失败：${e.message}`;
-    }
-  });
-
   // ── 记忆整理区块事件 ──
   const memUseChat = $('#cfg-mem-usechat');
   if (memUseChat) memUseChat.addEventListener('change', () => {
@@ -920,29 +905,6 @@ function bindSettingsEvents(c) {
       btn.textContent = hasDot ? `${n} ●` : n;
     });
   }).catch(() => {});
-
-  // ── 检查更新（桌面端区块） ──
-  const curVerEl = $('#update-current');
-  if (curVerEl) {
-    api('/api/version').then((d) => { curVerEl.textContent = `v${d.version || '?'}`; })
-      .catch(() => { curVerEl.textContent = ''; });
-  }
-  const checkUpdateBtn = $('#check-update-btn');
-  if (checkUpdateBtn) checkUpdateBtn.addEventListener('click', async () => {
-    const hint = $('#update-hint');
-    checkUpdateBtn.disabled = true;
-    if (hint) hint.textContent = '检查中…';
-    const data = await runUpdateCheck({ manual: true });   // 手动：即使关过浮窗也再弹一次
-    if (!data) {
-      if (hint) hint.textContent = '检查失败：网络不可达';
-    } else if (!data.ok) {
-      if (hint) hint.textContent = `检查失败：${data.error || '未知错误'}`;
-    } else if (data.hasUpdate) {
-      // 有新版：给下载链接。Electron 里 target=_blank 会被 main.js 转给系统浏览器。
-      if (hint) hint.innerHTML = `发现新版本 <b>v${esc(data.latest)}</b>（当前 v${esc(data.current)}） <a href="${esc(data.url)}" target="_blank" rel="noopener">去下载</a>`;
-    } else if (hint) hint.textContent = `已是最新（v${data.current}）`;
-    checkUpdateBtn.disabled = false;
-  });
 
   // ── OneBot 区块事件 ──
   const openSnowlumaBtn = $('#open-snowluma-btn');

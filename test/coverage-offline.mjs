@@ -646,12 +646,7 @@ c.section('9. model-prices.js 价格表与成本');
     assert.ok(miss === null || typeof miss === 'object', '未命中应安全返回');
   });
 
-  await c.check('setRemotePrices / remoteOverrideCount：远程价格可注入可查询', () => {
-    mp.setRemotePrices({ 'remote-model-x': { in: 1, out: 2, cached: 1 } });
-    assert.ok(mp.remoteOverrideCount() >= 1, '远程覆盖条数应 ≥1');
-    mp.setRemotePrices({});
-    assert.equal(mp.remoteOverrideCount(), 0, '清空后应为 0');
-  });
+  // 远程价格表（setRemotePrices / remoteOverrideCount）已随原作者服务器下线移除。
 
   await c.check('modelLabel / splitModelLabel / vendorOfConfig：渠道模型标签可往返', () => {
     const label = mp.modelLabel('a6api', 'glm-5');

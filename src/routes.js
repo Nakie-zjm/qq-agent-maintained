@@ -17,7 +17,6 @@ import { getConfig, updateConfig, deepMerge as deepMergeConfig, DATA_DIR } from 
 import { customSearch } from './web-search.js';
 import { listModels, chatCompletion, resolveApiKey, estimateCost, cacheHitRate } from './llm.js';
 import { resolveOfficialPrice, listOfficialPrices } from './model-prices.js';
-import { refreshPriceFeed, priceFeedStatus, initPriceFeed } from './price-feed.js';
 import {
   currentProviders, setProviderKey, testAllProviders, testOneProvider,
   testModelChat, fetchModelsFrom, upsertProvider, addModelsToProvider, removeModelFromProvider, removeProvider
@@ -30,7 +29,7 @@ import { skillManager } from './skills/manager.js';
 import { getSkillConfig, setSkillConfig, setSkillEnabled, listConfiguredSkillIds } from './skills/config.js';
 import { availabilityOf, listTools, CATEGORY_META } from './tool-registry.js';
 import { safeFetchBinary, browseLockState } from './safe-fetch.js';
-import { getGlobalBlocklist, updateGlobalBlocklist, FIXED_PRICE_FEED_URL } from './community.js';
+import { getGlobalBlocklist, updateGlobalBlocklist } from './community.js';
 import { detectDialect as detectThinkingDialect } from './thinking.js';
 
 /**
@@ -42,7 +41,7 @@ export function createRoutes(deps) {
     store, memory, sessions, onebot, orchestrator,
     emit, log,
     // app.js 内部的过程/状态
-    localVersion, compareSemver, UPDATE_INFO_URL,
+    localVersion,
     sanitizeConfig, keyEndpointAllowed, sanitizeProvider,
     readBody, authorize,
     snowlumaDir, snowlumaWsPort, snowlumaWebuiUrl, snowlumaStatus, snowlumaLogs,
@@ -220,20 +219,8 @@ export function createRoutes(deps) {
       method: 'GET', pattern: '/api/model-prices',
       handler: async ({ res, json, url }) => json(res, 200, {
         prices: listOfficialPrices(),
-        current: resolveOfficialPrice(String(url.searchParams.get('model') || getConfig().api?.model || '')),
-        remote: { ...priceFeedStatus(), url: FIXED_PRICE_FEED_URL }
+        current: resolveOfficialPrice(String(url.searchParams.get('model') || getConfig().api?.model || ''))
       })
-    },
-    {
-      method: 'POST', pattern: '/api/model-prices/refresh',
-      handler: async ({ res, json }) => {
-        const st = await refreshPriceFeed(FIXED_PRICE_FEED_URL);
-        return json(res, 200, {
-          ok: st.ok, remote: st,
-          prices: listOfficialPrices(),
-          current: resolveOfficialPrice(getConfig().api?.model || '')
-        });
-      }
     },
 
     // ── SnowLuma 进程管理 ────────────────────────────────────────────
@@ -968,7 +955,6 @@ export function createRoutes(deps) {
         store.setMaxPerChat(next.store?.maxMessagesPerChat ?? 0);
         sessions?.setKeepFiles?.(next.store?.keepSessionFiles ?? 0);
         if (next.proactive?.enabled) orchestrator.startProactiveLoop(); else orchestrator.stopProactiveLoop();
-        initPriceFeed(FIXED_PRICE_FEED_URL);
         emit('status', { configUpdated: true });
         // ⚠️ 必须脱敏：updateConfig 返回的是内存里的活配置对象，含明文 apiKey /
         //    accessToken / dshProviderKeys。GET /api/config 一直是脱敏的，
@@ -996,31 +982,7 @@ export function createRoutes(deps) {
       method: 'GET', pattern: '/api/version',
       handler: async ({ res, json }) => json(res, 200, { version: localVersion() })
     },
-    {
-      method: 'GET', pattern: '/api/update-check',
-      handler: async ({ res, json }) => {
-        const current = localVersion();
-        // 本维护副本默认关闭更新检查（UPDATE_INFO_URL 为空）。
-        if (!UPDATE_INFO_URL) {
-          return json(res, 200, { ok: false, current, disabled: true, error: '更新检查已停用（本维护副本不连接原作者服务器）' });
-        }
-        try {
-          const r = await fetch(UPDATE_INFO_URL, { signal: AbortSignal.timeout(8000), cache: 'no-store' });
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const info = await r.json();
-          const latest = String(info.version || '');
-          if (!latest) throw new Error('version.json 缺少 version 字段');
-          return json(res, 200, {
-            ok: true, current, latest,
-            hasUpdate: compareSemver(latest, current) > 0,
-            url: String(info.url || ''),
-            notes: String(info.notes || '')
-          });
-        } catch (error) {
-          return json(res, 200, { ok: false, current, error: String(error?.message ?? error) });
-        }
-      }
-    },
+    // 更新检查已移除（原作者 version.json 随上游下线）。
 
     // ── 模型 / 会话 / 存档 ───────────────────────────────────────────
     {

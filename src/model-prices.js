@@ -320,39 +320,12 @@ export function resolveOfficialPrice(modelId) {
   return null;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   远程价格表（自托管 JSON，按 id 覆盖内置表）
-   ══════════════════════════════════════════════════════════════
+// 价格表只有内置一份（OFFICIAL_PRICES）：原作者的自托管远程表已随其服务器下线移除。
+const EFFECTIVE_PRICES = OFFICIAL_PRICES;
 
-   内置表 OFFICIAL_PRICES 保持只读、随版本发布；
-   远程表由 src/price-feed.js 拉取/校验后经 setRemotePrices 注入，
-   与内置表**按模型 id 合并**（远程赢），内置表其余条目仍是兜底。
-   查价时走 EFFECTIVE_PRICES —— 合并结果在注入时重建一次，
-   不在每次查价时临时拼（用量统计要逐条解析几百次）。
-*/
-let REMOTE_OVERRIDES = {};                 // { 模型id(小写): 条目 }
-let EFFECTIVE_PRICES = OFFICIAL_PRICES;    // 内置 + 远程的合并视图
-
-/** 注入远程价格表（已校验的条目）。传 {} 即退回纯内置表。 */
-export function setRemotePrices(map) {
-  REMOTE_OVERRIDES = (map && typeof map === 'object') ? map : {};
-  EFFECTIVE_PRICES = Object.keys(REMOTE_OVERRIDES).length
-    ? { ...OFFICIAL_PRICES, ...REMOTE_OVERRIDES }
-    : OFFICIAL_PRICES;
-}
-
-/** 当前生效的远程覆盖条目数（状态展示用）。 */
-export function remoteOverrideCount() {
-  return Object.keys(REMOTE_OVERRIDES).length;
-}
-
-/** 列出全部价格条目（给设置页展示/提示用）。远程覆盖的条目带 remote:true。 */
+/** 列出全部价格条目（给设置页展示/提示用）。 */
 export function listOfficialPrices() {
-  return Object.entries(EFFECTIVE_PRICES).map(([id, p]) => (
-    Object.prototype.hasOwnProperty.call(REMOTE_OVERRIDES, id)
-      ? { id, ...p, remote: true }
-      : { id, ...p }
-  ));
+  return Object.entries(EFFECTIVE_PRICES).map(([id, p]) => ({ id, ...p }));
 }
 
 /**

@@ -7,10 +7,8 @@
 //   · getGlobalBlocklist() / isGloballyBlocked() / updateGlobalBlocklist()  —— 读写本地配置
 //   · syncGlobalBlocklist() / startCommunitySync()                        —— 保持 API 形状，不做网络请求
 //   · COMMUNITY_API_BASE                                                  —— 固定为空，供断言"没有社区接口"
-//   · FIXED_PRICE_FEED_URL                                                —— 远程价格表地址，固定为空
-import { getConfig, updateConfig, FIXED_PRICE_REMOTE_URL } from './config.js';
+import { getConfig, updateConfig } from './config.js';
 
-export const FIXED_PRICE_FEED_URL = FIXED_PRICE_REMOTE_URL;
 export const COMMUNITY_API_BASE = '';
 
 /**

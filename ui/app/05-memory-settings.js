@@ -440,28 +440,6 @@ async function loadSettings() {
   renderSettings();
 }
 
-/** 设置页「远程价格表」状态行：来源（在线/缓存/内置）、时间、条目数、错误。 */
-function renderPriceFeedStatus() {
-  const el = $('#price-feed-status');
-  if (!el) return;
-  const r = state.modelPrices?.remote;
-  if (!r || !r.enabled) {
-    el.textContent = '官网价格表暂未启用，当前使用内置表；点击“拉取价格表”即可立即重试。';
-    return;
-  }
-  const when = r.fetchedAt ? fmtTime(r.fetchedAt) : '-';
-  const droppedTxt = r.dropped ? `，${r.dropped} 条不合格被丢弃` : '';
-  if (r.ok && r.source === 'remote') {
-    el.textContent = `远程表生效中：${r.count} 条覆盖内置表 · 上次拉取 ${when}${droppedTxt}`;
-  } else if (!r.ok && r.source === 'cache') {
-    el.textContent = `服务器暂时拉不到（${r.error || '未知错误'}），正在用上次缓存的远程表（${r.count} 条）· ${when}`;
-  } else if (!r.ok) {
-    el.textContent = `拉取失败（${r.error || '未知错误'}），暂用内置表 · ${when}`;
-  } else {
-    el.textContent = `已应用本地缓存（${r.count} 条），正在拉取最新…`;
-  }
-}
-
 /**
  * 刷新「当前模型单价」卡片。
  *

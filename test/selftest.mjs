@@ -1304,73 +1304,7 @@ refs:
     pass('搜索次数 + 工具调用明细统计（不进成本）');
   }
 
-  // ── 场景 35：远程价格表（校验/规范化 + 覆盖优先级 + 接口）──
-  {
-    const { normalizePriceFeed, refreshPriceFeed, priceFeedStatus, setPriceFeedTestUrl } = await import('../src/price-feed.js');
-    const { resolveOfficialPrice, setRemotePrices, listOfficialPrices } = await import('../src/model-prices.js');
-
-    // ① 四种外形都能解析
-    const bareMap = { 'test-feed-model': { in: 9, out: 99, cached: 0.9 } };
-    const wrapped = { prices: bareMap };
-    const arrWrap = { prices: [{ id: 'test-feed-model', in: 9, out: 99 }] };
-    const bareArr = [{ id: 'test-feed-model', in: 9, out: 99 }];
-    for (const [name, payload] of [['裸map', bareMap], ['包裹map', wrapped], ['包裹数组', arrWrap], ['裸数组', bareArr]]) {
-      const n = normalizePriceFeed(payload);
-      assert.ok(n && n.prices['test-feed-model'], `${name} 应解析出条目`);
-      assert.equal(n.prices['test-feed-model'].in, 9, `${name} in 值应正确`);
-    }
-
-    // ② 坏条目被丢弃；全是垃圾 → null（判拉取失败，不清旧表）
-    const mixed = normalizePriceFeed({ good: { in: 1, out: 2 }, bad: { no: 'fields' }, alsobad: 'x' });
-    assert.equal(Object.keys(mixed.prices).length, 1, '坏条目应被丢弃');
-    assert.equal(mixed.dropped, 2, '应报告丢弃数 2');
-    assert.equal(normalizePriceFeed({ a: 'junk' }), null, '全垃圾载荷应判 null');
-    assert.equal(normalizePriceFeed('not-json-object'), null, '非对象载荷应判 null');
-
-    // ③ 覆盖语义：远程条目按 id 赢内置表；其余内置条目还在
-    // 先记下内置价（不写死数字：官方调价后测试不该跟着改）
-    const builtinFlashIn = resolveOfficialPrice('deepseek-v4-flash').in;
-    setRemotePrices({ 'deepseek-v4-flash': { in: 111, out: 222, cached: 0.5, src: 'remote' } });
-    const overridden = resolveOfficialPrice('deepseek-v4-flash');
-    assert.equal(overridden.in, 111, '远程条目应覆盖内置表');
-    assert.ok(resolveOfficialPrice('glm-5.3'), '未覆盖的内置条目应仍可解析');
-    const listed = listOfficialPrices();
-    assert.ok(listed.find((x) => x.id === 'deepseek-v4-flash')?.remote === true, '列表应标记 remote:true');
-    setRemotePrices({});   // 还原：不能污染后面的成本断言
-    assert.equal(resolveOfficialPrice("deepseek-v4-flash").in, builtinFlashIn, "清空后应回退内置价");
-
-    // ④ 真拉一次：起一个临时 HTTP 服务器当"用户自托管价格表"
-    const feedServer = http.createServer((req, res) => {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ prices: { 'test-remote-live': { in: 7, out: 70 } } }));
-    });
-    await new Promise((r) => feedServer.listen(0, '127.0.0.1', r));
-    const feedUrl = `http://127.0.0.1:${feedServer.address().port}/prices.json`;
-    setPriceFeedTestUrl(feedUrl);
-    const st1 = await refreshPriceFeed(feedUrl);
-    assert.ok(st1.ok && st1.source === 'remote', '应从远程拉取成功');
-    assert.equal(resolveOfficialPrice('test-remote-live').in, 7, '拉到的条目应立即可查');
-
-    // 失败场景：服务器挂了 → ok=false，但表不清（继续用刚才拉到的）
-    feedServer.close();
-    await sleep(50);
-    const st2 = await refreshPriceFeed(feedUrl);
-    assert.ok(!st2.ok && st2.error, '连接失败应报告错误');
-    assert.equal(resolveOfficialPrice('test-remote-live').in, 7, '拉取失败不能清掉已有远程表');
-    setRemotePrices({});   // 收尾还原
-    setPriceFeedTestUrl('');
-
-    // ⑤ 接口：/api/model-prices 必须带 remote 状态；/api/model-prices/refresh 必须存在（不能 404）
-    const get = async (p) => (await (await fetch(`http://127.0.0.1:${cfg.server.port}${p}`)).json());
-    const mp = await get('/api/model-prices');
-    assert.ok(mp.remote && typeof mp.remote.enabled === 'boolean', 'model-prices 应带 remote 状态');
-    const rr = await (await fetch(`http://127.0.0.1:${cfg.server.port}/api/model-prices/refresh`, { method: 'POST' })).json();
-    assert.ok(rr.remote, 'refresh 接口应返回 remote 状态');
-    assert.equal(rr.remote.enabled, false, '本维护副本默认关闭远程价格表（不连接作者服务器）');
-    assert.equal(rr.remote.url, '', '默认不带远程价格表地址（可用 QQ_AGENT_PRICE_FEED_URL 自建）');
-
-    pass('远程价格表：四种格式解析 + 覆盖优先级 + 失败不清表 + 接口齐全');
-  }
+  // 场景 35（远程价格表）已随原作者服务器下线移除：价格只用内置表。
 
   // ── 场景 36：合并转发聊天记录展开（模型要读懂内容，不是只看占位符）──
   {

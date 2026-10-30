@@ -110,19 +110,7 @@ c.section('1. 状态 / 用量 / 价格');
     assert.ok('current' in r.data, '应返回当前模型价格');
   });
 
-  await c.check('POST /api/model-prices/refresh：远程 URL 为空时不联网、安全返回', async () => {
-    const r = await hit('POST', '/api/model-prices/refresh');
-    assert.ok(r.status === 200, `应 200，实际 ${r.status}`);
-    assert.ok(r.data && typeof r.data === 'object');
-  });
-
-  await c.check('GET /api/update-check：联网检查更新，失败也返回结构化结果', async () => {
-    const r = await hit('GET', '/api/update-check');
-    assert.equal(r.status, 200, `应 200（失败也走 ok:false），实际 ${r.status}`);
-    assert.ok('ok' in r.data, '应返回 ok 字段');
-    assert.ok('current' in r.data, '应返回当前版本');
-    assert.ok(r.data.ok === true ? typeof r.data.hasUpdate === 'boolean' : true, '成功时应给出 hasUpdate');
-  });
+  // /api/model-prices/refresh 与 /api/update-check 已随原作者服务器下线移除。
 }
 
 // ── 2. 配置接口 ──────────────────────────────────────────────────────────

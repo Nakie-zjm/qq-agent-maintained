@@ -18,9 +18,6 @@ export const ROOT = path.resolve(__dirname, '..');
 //   晚一步设置就会有一部分文件写到主实例的目录里，造成两个实例数据互相污染。
 import { profileSuffix, portOffset } from './profile.js';
 
-// 原作者的远程价格表已随上游下线，本副本**永久关闭**（不提供自建开关）：
-// 结算一律使用 src/model-prices.js 里的内置价格表。
-export const FIXED_PRICE_REMOTE_URL = '';
 export const DATA_DIR = process.env.QQ_AGENT_DATA_DIR || path.join(ROOT, `data${profileSuffix()}`);
 export const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
@@ -80,9 +77,8 @@ export const DEFAULT_CONFIG = {
     priceOutputPerM: 0,     // 输出单价
     priceCachedPerM: 0,     // 输入且命中缓存的单价；留 0 时按 priceInputPerM 计
     useOfficialPrice: true, // true = 优先用内置官方价格表（按模型 id 匹配）
-    // 远程价格表地址由 src/community.js 固定为官网公开表（FIXED_PRICE_FEED_URL），
-    // 任何代码都不得再读/写 api.priceRemoteUrl —— 它是已废弃的历史字段，
-    // loadConfig 时统一剔除（见 stripObsoleteFields），避免磁盘旧值继续冒充"生效地址"。
+    // 原作者的远程价格表已随上游下线：价格只用内置官方表 + 这里的本地单价。
+    // api.priceRemoteUrl 是已废弃的历史字段，loadConfig 时统一剔除（见 stripObsoleteFields）。
     // 按模型单独设定的价格：{ [模型 id]: { in, out, cached } }
     // 优先级最高 —— 一旦这里有记录，就不再用内置官方表，也不受全局默认单价影响。
     // 改动只存在这里，不会回写内置价格表（src/model-prices.js）。
@@ -495,7 +491,7 @@ export function migrateLegacySkills(parsed) {
  * 剔除**废弃字段**（磁盘/回传 patch 都可能带着的历史残留）。
  * 这些字段已无任何读点，留着只会冒充"生效配置"继续漂移：
  *   · api.stream          —— llm.js 请求体硬编码 stream:false（无 UI、无读点）
- *   · api.priceRemoteUrl  —— 远程价格表地址固定为 src/community.js 的常量
+ *   · api.priceRemoteUrl  —— 远程价格表功能已随原作者服务器移除
  *   · budget（容器整体）  —— 预算保险丝功能已移除，容器本身也无读点
  *   · store.peakSchedule.valley.start/end —— "高峰外=低谷"语义下无人读
  *     （peakSchedule.valley.sliderPos 保留，peakSchedule.custom.valley 同口径只留 sliderPos）

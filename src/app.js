@@ -19,14 +19,13 @@ import { ReminderStore } from './reminders.js';
 import { VideoReader } from './video-reader.js';
 import { cacheHitRate } from './llm.js';
 import { isPeakHour, priceAt, resolveModelPrice, modelLabel, splitModelLabel, UNKNOWN_VENDOR } from './model-prices.js';
-import { initPriceFeed } from './price-feed.js';
 import { loadPlugins, watchPlugins } from './plugin-loader.js';
 import { skillManager } from './skills/manager.js';
 import { extractCandidateUrls, dispatchMediaLinks } from './media-links.js';
 import { createRoutes } from './routes.js';
 import * as instanceLockModule from './instance-lock.js';
 import { logger } from './logger.js';
-import { startCommunitySync, isGloballyBlocked, FIXED_PRICE_FEED_URL } from './community.js';
+import { startCommunitySync, isGloballyBlocked } from './community.js';
 
 // 全局 fetch（undici）默认连接建立超时只有 10 秒，openrouter.ai 这类海外端点
 // 握手慢时会直接报 "Connect Timeout Error ... timeout: 10000ms"（注意这不是
@@ -52,26 +51,11 @@ function allowed(kind, id, cfg) {
   return cfg.allowAllWhenEmpty === true;
 }
 
-// ── 版本更新检查 ─────────────────────────────────────────────────────
-// 原作者的 version.json 已随上游下线，本副本**永久关闭**更新检查（不提供自建开关）。
-const UPDATE_INFO_URL = '';
-
 function localVersion() {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
     return String(pkg.version || '0.0.0');
   } catch { return '0.0.0'; }
-}
-
-/** x.y.z 三段数字比较；返回 1 / 0 / -1。非数字段按 0 处理，够用。 */
-function compareSemver(a, b) {
-  const pa = String(a).split('.').map((x) => parseInt(x, 10) || 0);
-  const pb = String(b).split('.').map((x) => parseInt(x, 10) || 0);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
-    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
-  }
-  return 0;
 }
 
 /* createApp 产生的所有 appLog 函数（模块级 WeakSet）。
@@ -644,9 +628,6 @@ export function createApp({ log = console.log } = {}) {
   const reminders = new ReminderStore();
   const videoReader = new VideoReader(onebot);
   const orchestrator = new Orchestrator({ store, memory, stickers, sender, sessions, onebot, emit, reminders, videoReader });
-
-  // 远程价格表固定为官网公开地址；不从用户配置读取，避免被页面/配置篡改。
-  initPriceFeed(FIXED_PRICE_FEED_URL);
 
   // 云端统一屏蔽名单：启动先用 data 缓存，后台同步；网络失败不影响本地拦截。
   const communitySyncTimer = startCommunitySync(log);
@@ -1288,7 +1269,7 @@ export function createApp({ log = console.log } = {}) {
   const apiRoutes = createRoutes({
     store, memory, sessions, onebot, orchestrator,
     emit, log,
-    localVersion, compareSemver, UPDATE_INFO_URL,
+    localVersion,
     sanitizeConfig, keyEndpointAllowed, sanitizeProvider,
     readBody, authorize,
     snowlumaDir, snowlumaWsPort, snowlumaWebuiUrl, snowlumaWebuiPort, snowlumaStatus, snowlumaLogs,

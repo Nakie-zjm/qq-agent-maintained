@@ -81,13 +81,10 @@ await check('云端同步已停用：不启动定时器，同步只返回本地�
   assert.deepEqual(synced, community.getGlobalBlocklist(), '同步返回的应是本地名单');
 });
 
-await check('远程价格表永久关闭，且不接受配置覆盖', async () => {
-  const { setPriceFeedTestUrl, refreshPriceFeed, priceFeedStatus } = await import('../src/price-feed.js');
-  updateConfig({ api: { priceRemoteUrl: 'https://evil.example.com/prices.json' } });
-  assert.equal(community.FIXED_PRICE_FEED_URL, '', '远程价格表地址固定为空（不提供自建开关）');
-  setPriceFeedTestUrl('');
-  await refreshPriceFeed('https://evil.example.com/prices.json').catch(() => {});
-  assert.equal(priceFeedStatus().url, '', '即使调用方传别的地址也不会生效');
+await check('远程价格表已随上游移除（价格只用内置表）', async () => {
+  const fs2 = await import('node:fs');
+  const p = new URL('../src/price-feed.js', import.meta.url);
+  assert.equal(fs2.existsSync(p), false, 'src/price-feed.js 应已删除');
 });
 
 fs.rmSync(dataDir, { recursive: true, force: true });

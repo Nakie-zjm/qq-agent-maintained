@@ -56,7 +56,7 @@ function renderSettingsSidebar() {
       <div class="rs-row muted">${state.paused ? '⏸ 已暂停' : (s?.orchestrator?.model ? `模型：${esc(s.orchestrator.model)}` : '模型：未设置')}</div>
     </div>
     <div class="settings-menu">
-      ${menu.map(([id, label]) => `<button class="settings-menu-item ${state.settingsSection === id ? 'active' : ''}" data-section="${id}">${label}${id === 'desktop' && (typeof updateAvailable !== 'undefined' && updateAvailable) ? '<span class="update-dot" title="发现新版本"></span>' : ''}</button>`).join('')}
+      ${menu.map(([id, label]) => `<button class="settings-menu-item ${state.settingsSection === id ? 'active' : ''}" data-section="${id}">${label}</button>`).join('')}
     </div>`;
   sidebar.querySelectorAll('.settings-menu-item').forEach((el) => {
     el.addEventListener('click', () => {
@@ -213,14 +213,6 @@ function renderApiSection(c) {
       sub: '官方价表 / 当前单价 / 批量自定义',
       body: `
     <div class="checkbox-row">${switchHtml('cfg-useofficialprice', c.api.useOfficialPrice !== false, '用内置官方价格表估算（按模型 id 自动匹配；走中转站请关掉）')}</div>
-
-    <div class="field" style="margin-top:6px"><label>远程价格表</label>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="muted">官网统一价格表</span>
-        <button class="btn btn-small" id="price-feed-refresh-btn" title="从官网拉取最新价格表">拉取价格表</button>
-      </div>
-      <div class="hint" id="price-feed-status" style="margin-top:4px"></div>
-    </div>
 
     <div class="price-card" id="model-price-card">
       <div class="pc-head">
@@ -991,13 +983,7 @@ function renderDesktopSection(c) {
       <button class="btn btn-danger" id="reset-data-btn">重置为初始形态</button>
       <span class="hint" id="reset-data-hint" style="margin-left:10px"></span>
       <div class="hint" style="margin-top:6px">⚠️ 此操作会删除所有用户数据（配置、聊天记录、记忆、表情包），不可恢复。建议先备份。</div>
-    </div>
-    <h3>版本更新</h3>
-    <div class="field"><label>当前版本 <b id="update-current">…</b><span id="update-status-text">${(typeof updateAvailable !== 'undefined' && updateAvailable) ? '<b style="color:var(--orange)">；发现新版本</b>' : '；检查线上是否有新版本'}</span></label>
-      <div style="display:flex;gap:10px;align-items:center">
-        <button class="btn btn-small" id="check-update-btn">检查更新</button>
-        <span class="hint" id="update-hint" style="margin:0"></span>
-      </div></div>`;
+    </div>`;
 }
 
 function renderOnebotSection(c) {
