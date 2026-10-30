@@ -18,10 +18,9 @@ export const ROOT = path.resolve(__dirname, '..');
 //   晚一步设置就会有一部分文件写到主实例的目录里，造成两个实例数据互相污染。
 import { profileSuffix, portOffset } from './profile.js';
 
-// 本维护副本（Nakie-zjm/qq-agent-maintained）不再连接原作者的服务器：
-// 远程价格表默认关闭，结算一律用内置价格表（价格表会落盘覆盖内置表，所以只接受 https）。
-// 需要自建镜像时，用环境变量 QQ_AGENT_PRICE_FEED_URL 指向自己的 https 地址。
-export const FIXED_PRICE_REMOTE_URL = String(process.env.QQ_AGENT_PRICE_FEED_URL || '').trim();
+// 原作者的远程价格表已随上游下线，本副本**永久关闭**（不提供自建开关）：
+// 结算一律使用 src/model-prices.js 里的内置价格表。
+export const FIXED_PRICE_REMOTE_URL = '';
 export const DATA_DIR = process.env.QQ_AGENT_DATA_DIR || path.join(ROOT, `data${profileSuffix()}`);
 export const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 

@@ -16,9 +16,8 @@ import path from 'node:path';
 import { ROOT, DATA_DIR, getConfig } from './config.js';
 import { logger } from './logger.js';
 
-// 本维护副本不连接原作者的社区服务：默认留空 = 市场（登录/发布/口令安装）全部停用。
-// 需要自建时用环境变量 QQ_AGENT_MARKET_API 指向自己的接口。
-export const MARKET_API_BASE = String(process.env.QQ_AGENT_MARKET_API || '').trim();
+// 原作者的社区市场（登录 / 发布 / 口令安装）已随上游下线，本副本**永久关闭**，不提供自建开关。
+export const MARKET_API_BASE = '';
 
 /** base 为空时一律拒绝，避免拼出相对 URL 去 fetch（会直接抛 Invalid URL）。 */
 function marketBase() {

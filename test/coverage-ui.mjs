@@ -19,7 +19,6 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const css = read('ui/style.css');
 const html = read('ui/index.html');
-const landing = read('ui/landing.html');
 // M9 拆分：静态扫描面向全部 12 段拼接后的完整代码（与浏览器实际执行的集合一致）
 const appJs = (await import('./_ui-load.mjs')).loadUiAppCode().code;
 
@@ -145,20 +144,7 @@ await c.check('index.html 的本地资源引用全部存在', () => {
   }
 });
 
-await c.check('landing.html 的本地资源引用全部存在（曾经引用过不存在的 /assets/theme.*）', () => {
-  // ⚠️ landing.html 是**部署到官网**的落地页：/assets/theme.* 是站点级主题包，
-  // 存在于服务器上而不在本仓库 ui/ 下（本地直开由 .no-theme 兜底，见页面注释）。
-  // 站级资源只校验路径前缀；与页面同目录的相对文件（如群二维码）必须本地存在。
-  for (const u of localRefs(landing)) {
-    if (/^\/(assets|vendor)\//.test(u)) continue;   // 站级资源，服务器侧存在
-    if (u.startsWith('/')) {
-      assert.fail(`landing.html 不应引用其它本地根路径资源：${u}`);
-    } else {
-      const p = path.join(ROOT, 'ui', u);
-      assert.ok(fs.existsSync(p), `landing.html 引用了不存在的同目录资源：${u}`);
-    }
-  }
-});
+// landing.html（作者官网落地页）已随原作者服务器下线一并移除。
 
 await c.check('两个页面的主题机制统一：data-theme + qqa-theme', () => {
   // landing.html 跟随**主站**的主题约定（localStorage 'theme' 键 + html.light/dark），
@@ -217,14 +203,7 @@ await c.check('技能页与插件页按 kind 隔离（不会把插件渲染进�
     `条目过滤没有按 kind 判型：${m[1]}`);
 });
 
-await c.check('landing.html 的下载链接带版本号（官网同目录部署，相对路径即可）', () => {
-  // 2026-09-07 起下载链接刻意改为"带版本号的相对路径"（commit e359c29）：
-  // 安装包与落地页同目录部署在官网，相对路径在部署环境有效；
-  // "必须绝对地址"的旧断言是按本地服务口径写的，与部署事实相反。
-  const m = /href="([^"]*qq-agent-v[\d.]+-setup\.exe)"/.exec(landing);
-  assert.ok(m, '找不到安装包下载链接');
-  assert.ok(/^[\w.-]+\.exe$/.test(m[1]), `应为同目录相对文件名（带版本号），实际：${m[1]}`);
-});
+// landing.html 的安装包下载链接断言已随页面一起移除。
 
 // ── 3. vendor 镜像一致性 ─────────────────────────────────────────────────
 c.section('3. vendor 镜像一致性');

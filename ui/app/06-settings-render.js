@@ -1372,7 +1372,7 @@ function renderModulePage(kind) {
     const settingsBtn = allFields.length
       ? `<button class="mcard-gear" data-skill-id="${esc(s.id)}" title="设置（${allFields.length} 项）" aria-label="打开 ${esc(s.name)} 的设置">⚙</button>`
       : '';
-    const uploadBtn = `<button class="mcard-upload" data-skill-id="${esc(s.id)}" data-skill-kind="${kind}" title="上传到市场" aria-label="上传 ${esc(s.name)} 到市场">⬆</button>`;
+    // 上传到市场（⬆）已移除：市场随原作者服务器下线，本副本不再有发布入口。
     const haystack = [s.id, s.name, s.description, s.dir].filter(Boolean).join(' ').toLowerCase();
     return `
     <div class="mcard ${stateCls}" data-skill-id="${esc(s.id)}" data-search="${esc(haystack)}" role="button" tabindex="0" title="${esc(stateTitle)}">
@@ -1382,7 +1382,7 @@ function renderModulePage(kind) {
         <div class="mcard-desc">${esc(s.description || '（没有写介绍）')}</div>
         ${errLine ? `<div class="mcard-err">${esc(errLine)}</div>` : ''}
       </div>
-      <div class="mcard-acts">${uploadBtn}${settingsBtn}</div>
+      <div class="mcard-acts">${settingsBtn}</div>
     </div>`;
   };
 
@@ -1436,10 +1436,8 @@ function renderPluginsPage() { return renderModulePage('plugin'); }
 function bindModulePageEvents(kind) {
   const meta = MODULE_KINDS[kind];
   if (!meta) return;
-  // 「＋ 添加」入口（标题旁）：打开添加模态框（去市场口令安装 / 自建指南）。
-  // ⚠️ 这个入口曾经从模板里消失过 —— openAddModuleModal 变成没人调用的孤本，
-  // 技能/插件页直接失去"添加"能力。按钮与绑定必须成对存在（2026-09-26 修复）。
-  $(`#${meta.tab}-add-btn`)?.addEventListener('click', () => openAddModuleModal(kind));
+  // 「＋ 添加」入口（标题旁）：市场已随原作者服务器下线，直接进「自己造」指南。
+  $(`#${meta.tab}-add-btn`)?.addEventListener('click', () => openCreateModuleGuide(kind));
   $(`#${meta.tab}-refresh-btn`)?.addEventListener('click', () => loadModulePage(kind, { rescan: true }));
   // 残留配置清理（只在技能页渲染，按钮也只在这一页出现）
   $('#skills-cleanup-btn')?.addEventListener('click', async () => {
@@ -1469,13 +1467,7 @@ function bindModulePageEvents(kind) {
       openSkillSettings(btn.dataset.skillId);
     });
   });
-  // 上传到市场（⬆ 钮）：同样 stopPropagation，且带上卡片所属类型
-  scope.querySelectorAll('.mcard-upload').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openMarketUploadModal(btn.dataset.skillKind || kind, btn.dataset.skillId);
-    });
-  });
+  // 上传到市场（⬆）已移除：市场随原作者服务器下线。
   // ── 整卡即开关：点击卡片任意处切换启停（复用原 skill-toggle 的请求链）──
   // 键盘可达：Enter/Space 同样触发（role=button + tabindex=0）。
   scope.querySelectorAll('.mcard').forEach((cardEl) => {

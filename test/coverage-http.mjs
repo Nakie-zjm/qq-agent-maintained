@@ -826,10 +826,7 @@ c.section('12. 静态文件与路径穿越防护');
     }
   });
 
-  await c.check('GET /landing.html 可访问（虽是孤儿页面）', async () => {
-    const r = await request('GET', '/landing.html');
-    assert.equal(r.status, 200);
-  });
+  // GET /landing.html：作者官网落地页已随原作者服务器下线一并移除，不再提供。
 
   await c.check('GET 不存在的静态文件返回 404', async () => {
     const r = await request('GET', '/no-such-file-xyz.js');

@@ -20,7 +20,6 @@ import { VideoReader } from './video-reader.js';
 import { cacheHitRate } from './llm.js';
 import { isPeakHour, priceAt, resolveModelPrice, modelLabel, splitModelLabel, UNKNOWN_VENDOR } from './model-prices.js';
 import { initPriceFeed } from './price-feed.js';
-import { startTelemetryLoop } from './telemetry.js';
 import { loadPlugins, watchPlugins } from './plugin-loader.js';
 import { skillManager } from './skills/manager.js';
 import { extractCandidateUrls, dispatchMediaLinks } from './media-links.js';
@@ -54,10 +53,8 @@ function allowed(kind, id, cfg) {
 }
 
 // ── 版本更新检查 ─────────────────────────────────────────────────────
-// 本维护副本不连接原作者服务器：默认关闭更新检查（UPDATE_INFO_URL 为空 = 接口直接返回"已停用"）。
-// 需要自建版本信息时，用环境变量 QQ_AGENT_UPDATE_URL 指向自己的 https 地址（JSON 形如 {version,url,notes}）。
-// 由后端代取而不是前端直连：绕过 CORS，且失败信息能统一回给 UI。
-const UPDATE_INFO_URL = String(process.env.QQ_AGENT_UPDATE_URL || '').trim();
+// 原作者的 version.json 已随上游下线，本副本**永久关闭**更新检查（不提供自建开关）。
+const UPDATE_INFO_URL = '';
 
 function localVersion() {
   try {
@@ -1491,8 +1488,7 @@ export function createApp({ log = console.log } = {}) {
     }
     if (port == null) throw lastError ?? new Error('无法监听端口');
 
-    // 匿名用量遥测：启动 90 秒后发第一次，之后每 6 小时一次；失败静默不影响使用
-    startTelemetryLoop(log);
+    // 匿名用量遥测已随原作者服务器下线一并移除（本副本不再上报任何数据）。
 
     // 会话索引后台对账：启动读的是毫秒级缓存，这里异步补扫磁盘修正差异
     // （缓存缺失的新文件/外部删除的文件）。不 await —— 不挡任何启动步骤。
