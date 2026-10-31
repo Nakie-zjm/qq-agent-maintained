@@ -937,12 +937,17 @@ td b, .tbl td b { color: var(--tx); font-weight: 600; }
   display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; margin-left: auto;
 }
-.mcard-gear, .mcard-upload {
+.mcard-gear, .mcard-upload, .mcard-del {
   width: 36px; height: 36px; border-radius: var(--r-sm);
   border: 1px solid var(--bd2); background: var(--bg2); color: var(--tx2);
   display: grid; place-items: center; font-size: 16px;
 }
 .mcard-gear:hover, .mcard-upload:hover { background: var(--ac); color: #fff; border-color: var(--ac); }
+/* 删除按钮：与齿轮同尺寸/底色（上面的选择器共用），但 hover 走危险色（红）。
+   它紧挨着齿轮、而整卡点击 = 开关 —— 颜色必须一眼区分出"这是破坏性操作"，
+   不能和设置齿轮一样用强调色，否则误点代价太大。 */
+.mcard-del:hover { background: var(--err); color: #fff; border-color: var(--err); }
+.mcard-del:disabled { opacity: .5; cursor: default; }
 
 /* ══ 8. 设置页 ══ */
 .settings-sidebar {

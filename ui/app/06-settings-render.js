@@ -1385,6 +1385,13 @@ function renderModulePage(kind) {
     const settingsBtn = allFields.length
       ? `<button class="mcard-gear" data-skill-id="${esc(s.id)}" title="设置（${allFields.length} 项）" aria-label="打开 ${esc(s.name)} 的设置">⚙</button>`
       : '';
+    // 删除入口：放在设置齿轮之后。**加载失败的条目也允许删** —— 目录里往往是
+    // 坏掉的入口文件，正是最该清掉的时候，所以这里刻意不按 s.loaded 过滤。
+    // 目录信息取后端 status 的 s.dir（如 skills/foo）；自定义根目录下可能没有，退化成通用文案。
+    const delTitle = s.dir
+      ? `删除（永久移除 ${s.dir} 目录）`
+      : '删除（永久移除它的磁盘目录及配置）';
+    const delBtn = `<button class="mcard-del" data-skill-id="${esc(s.id)}" data-skill-name="${esc(s.name)}" title="${esc(delTitle)}" aria-label="删除 ${esc(s.name)}">🗑</button>`;
     // 上传到市场（⬆）已移除：市场随原作者服务器下线，本副本不再有发布入口。
     const haystack = [s.id, s.name, s.description, s.dir].filter(Boolean).join(' ').toLowerCase();
     return `
@@ -1395,7 +1402,7 @@ function renderModulePage(kind) {
         <div class="mcard-desc">${esc(s.description || '（没有写介绍）')}</div>
         ${errLine ? `<div class="mcard-err">${esc(errLine)}</div>` : ''}
       </div>
-      <div class="mcard-acts">${settingsBtn}</div>
+      <div class="mcard-acts">${settingsBtn}${delBtn}</div>
     </div>`;
   };
 
@@ -1480,6 +1487,39 @@ function bindModulePageEvents(kind) {
       openSkillSettings(btn.dataset.skillId);
     });
   });
+  // ── 删除条目（🗑）：确认后 DELETE /api/skills/:id ──
+  // 按钮也长在卡片内部，而整卡点击 = 开关 —— 所以点击**必须 stopPropagation**，
+  // 否则点删除会先顺手切一次开关（用户看到状态闪变，容易误以为删成了/删错了）。
+  // 键盘 Enter/Space 是卡片自身监听的（role=button），按钮不重复处理；
+  // 否则一次按键会同时触发"删除"和"开关"两个动作。
+  // 加载失败的卡片同样可删（s.loaded=false 不影响）—— 坏目录正是最该清理的对象。
+  scope.querySelectorAll('.mcard-del').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.skillId;
+      if (!id) return;
+      const cur = (state.skills || []).find((s) => s.id === id);
+      const name = btn.dataset.skillName || cur?.name || id;
+      const dir = cur?.dir || '';
+      const typeWord = meta.kind === 'skill' ? '技能' : '插件';
+      // 文案必须把「不可恢复 + 会清掉配置」说到位：只说"确定删除？"用户会以为是停用，
+      // 而这是真删目录，删完代码和设置都没了。
+      const msg = `永久删除${typeWord}「${name}」？\n`
+        + (dir ? `磁盘目录：${dir}\n` : '')
+        + `该目录及其中全部代码会被永久删除，不可恢复。\n同时会清掉它的开关状态与全部设置。`;
+      if (!(await uiConfirm(msg))) return;
+      btn.disabled = true;   // 请求期间禁用，防止连点发多次 DELETE
+      try {
+        await api(`/api/skills/${encodeURIComponent(id)}`, { method: 'DELETE', body: '{}' });
+        // 成功后整页重载：卡片消失本身就是最直接的反馈（与开关后的重绘同一路径）
+        await loadModulePage(kind);
+      } catch (err) {
+        alert(`删除失败：${err.message}`);
+        // 请求失败时页面没重绘，按钮仍挂载 —— 恢复可点，别让用户卡在禁用态
+        btn.disabled = false;
+      }
+    });
+  });
   // 上传到市场（⬆）已移除：市场随原作者服务器下线。
   // ── 整卡即开关：点击卡片任意处切换启停（复用原 skill-toggle 的请求链）──
   // 键盘可达：Enter/Space 同样触发（role=button + tabindex=0）。
@@ -1507,6 +1547,12 @@ function bindModulePageEvents(kind) {
     };
     cardEl.addEventListener('click', toggle);
     cardEl.addEventListener('keydown', (e) => {
+      // 只处理卡片自身获得焦点时的按键。焦点在卡片内部的 ⚙ / 🗑 按钮上时，
+      // keydown 会冒泡到这里 —— 若不拦住，在删除按钮上按 Enter/Space 会同时
+      // 触发按钮自己的 click（删除）和这里的 toggle（开关），一次按键两个动作，
+      // 且其中一个是破坏性操作。按钮的 Enter/Space 由浏览器转成各自的 click，
+      // 所以这里直接忽略非卡片目标即可（顺带修好设置齿轮的同类问题）。
+      if (e.target !== cardEl) return;
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
     });
   });

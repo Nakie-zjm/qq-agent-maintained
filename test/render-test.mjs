@@ -261,6 +261,52 @@ const ctx = vm.createContext(sandbox);
     }
   }
 
+  // ── 技能页/插件页卡片的「删除」入口（🗑）──────────────────────────────
+  // 2026-10-31 回归：后端已有 DELETE /api/skills/:id，但卡片上曾经没有删除按钮 ——
+  // 后端能力没有 UI 入口，用户清理坏插件只能去手动删目录。这里断言：
+  //   ① 每张卡片都有且只有一个 .mcard-del 按钮（数量 = 本页卡片数）；
+  //   ② 按钮的 data-skill-id 与所属卡片的 data-skill-id 一一对应（点错就会删错条目）；
+  //   ③ 两页互不混入（技能页不出插件、插件页不出技能）。
+  console.log('\n=== 删除入口 ===');
+  {
+    const cardIdsOf = (html) => [...String(html).matchAll(/<div class="mcard [^"]*" data-skill-id="([^"]+)"/g)].map((m) => m[1]);
+    const delIdsOf = (html) => [...String(html).matchAll(/<button class="mcard-del" data-skill-id="([^"]+)"/g)].map((m) => m[1]);
+    const sameSet = (a, b) => a.length === b.length
+      && [...a].map(String).sort().join('\u0000') === [...b].map(String).sort().join('\u0000');
+    // kind='skill' 3 条（ok/off/dep）；kind='plugin' 2 条（broken/ok）
+    const pageCases = [
+      ['renderSkillsPage', '技能', ['ok-skill', 'off-skill', 'dep-skill'], ['broken-skill', 'ok-plugin']],
+      ['renderPluginsPage', '插件', ['broken-skill', 'ok-plugin'], ['ok-skill', 'off-skill', 'dep-skill']]
+    ];
+    for (const [fnName, typeLabel, expectIds, otherIds] of pageCases) {
+      const fn = ctx[fnName] || sandbox[fnName];
+      if (typeof fn !== 'function') { fail++; console.log(`  FAIL  ${fnName} 未定义`); continue; }
+      try {
+        const out = String(fn());
+        const cardIds = cardIdsOf(out);
+        const delIds = delIdsOf(out);
+        const btnCount = (out.match(/class="mcard-del"/g) || []).length;
+        // ① 每张卡片一个删除按钮
+        const okCount = btnCount === expectIds.length && cardIds.length === expectIds.length;
+        okCount ? pass++ : fail++;
+        console.log(`  ${okCount ? 'OK   ' : 'FAIL '} ${fnName}() ${expectIds.length} 张${typeLabel}卡片各 1 个删除按钮`
+          + `（实际卡片 ${cardIds.length} / 删除按钮 ${btnCount}）`);
+        // ② 卡片与删除按钮的 data-skill-id 一一对应，且正好是本页该有的条目
+        const okIds = sameSet(cardIds, delIds) && sameSet(delIds, expectIds);
+        okIds ? pass++ : fail++;
+        console.log(`  ${okIds ? 'OK   ' : 'FAIL '} ${fnName}() 删除按钮 data-skill-id 与卡片一致（${delIds.join(', ') || '无'}）`);
+        // ③ 另一型条目（含它的删除按钮）不得混入本页
+        const leaked = otherIds.filter((id) => delIds.includes(id) || cardIds.includes(id));
+        const okScope = leaked.length === 0;
+        okScope ? pass++ : fail++;
+        console.log(`  ${okScope ? 'OK   ' : 'FAIL '} ${fnName}() 未混入另一型条目${okScope ? '' : `：${leaked.join('/')}`}`);
+      } catch (e) {
+        fail++;
+        console.log(`  FAIL  ${fnName} 删除入口断言抛错: ${e && e.message}`);
+      }
+    }
+  }
+
   // 滑条换算函数
   console.log('\n=== 滑条换算（UI 侧）===');
   for (const fnName of ['sliderToTierUI', 'sliderToTierUI_tierToSlider', 'sliderDesc']) {

@@ -27,6 +27,11 @@ import { todayKey } from './util.js';
 import { logger } from './logger.js';
 import { skillManager } from './skills/manager.js';
 import { getSkillConfig, setSkillConfig, setSkillEnabled, listConfiguredSkillIds } from './skills/config.js';
+// 扩展目录根（skills/、plugins/）：删除技能/插件时用来校验"只能删根的直接子目录"。
+// 从 plugin-loader 取而不是自己拼 APP_ROOT：打包版与测试（环境变量覆盖目录）
+// 都走同一份解析结果，否则测试里会判到真实仓库目录上。
+import { SKILL_DIRS } from './plugin-loader.js';
+import { resolveDeletableExtensionDir, removeExtensionDir } from './skills/delete-dir.js';
 import { availabilityOf, listTools, CATEGORY_META } from './tool-registry.js';
 import { safeFetchBinary, browseLockState } from './safe-fetch.js';
 import { getGlobalBlocklist, updateGlobalBlocklist } from './community.js';
@@ -907,6 +912,105 @@ export function createRoutes(deps) {
           //    曾经直接回 getSkillConfig（明文），保存一次设置就把
           //    apiKey / Cookie 原文发回浏览器，与 GET 列表的脱敏口径相反。
           settings: skillManager.settingsView(id),
+          config: sanitizeConfig(getConfig())
+        });
+      }
+    },
+    {
+      // 删除 Skill / 插件：停生命周期 → 删磁盘目录 → 清配置 → 重扫。
+      // 顺序里有三处不能反：
+      //   ① unregister 必须在 rm 之前：deactivate/dispose 会停掉定时器、关掉
+      //      文件句柄，不先停就 rm，Windows 上大概率 EBUSY/EPERM；
+      //   ② 清配置必须在 rm **成功之后**：删目录失败时配置还在，重扫能把技能
+      //      原样恢复，用户重试即可；反过来先清配置会把"删不掉"变成"配置也没了"；
+      //   ③ 返回 200 之前必须重扫：重建 watcher、刷新工具表，否则技能页还显示
+      //      已删除的条目、模型仍拿着已删除技能的工具。
+      // 加载失败的条目（loadError 非空）同样可删 —— failRegister 也保存了 dir，
+      // 用户得能清掉写坏的插件，否则只能去手动删目录。
+      method: 'DELETE', pattern: /^\/api\/skills\/([^/]+)$/,
+      handler: async ({ res, json, match }) => {
+        const id = decodeURIComponent(match[1]);
+        const skill = skillManager.registry.get(id);
+        if (!skill) return json(res, 404, { ok: false, error: `Skill 不存在：${id}` });
+
+        // 安全校验（见 skills/delete-dir.js）：只允许删 skills/ 或 plugins/ 根目录的
+        // 直接子目录，拒绝符号链接、根外路径、根目录本身。注册表里的 dir 是加载器
+        // 写入的绝对路径，但仍从头校验 —— 配置/目录都可能被外部改过。
+        // 必须是 409 而不是 400：请求本身合法，是"当前磁盘状态不允许删"。
+        const roots = SKILL_DIRS;
+        const check = resolveDeletableExtensionDir(skill.dir, roots);
+        if (!check.ok) return json(res, 409, { ok: false, error: check.error });
+
+        // 先卸内存态：deactivate → dispose（回收工具/能力）。
+        // 放在 rm 之前，且不依赖它的返回值判错（管理器内部对生命周期异常已隔离，
+        // 单个 Skill 的 dispose 抛错不该阻断"删除"这个用户明确要求的动作）。
+        skillManager.unregister(id, { reason: 'delete' });
+
+        let removal;
+        try {
+          // 删除前再校验一次（TOCTOU）：校验、unregister 到真正 rm 之间目录可能被
+          // 替换成符号链接；removeExtensionDir 内部会重新走一遍完整规则。
+          removal = await removeExtensionDir(skill.dir, roots);
+        } catch (error) {
+          // 删磁盘失败（EBUSY/EPERM/ENOENT…）：目录还在，配置也还没动。
+          // 尽力重扫一次把内存注册表恢复回去（否则技能从列表里消失但磁盘还在，
+          // 用户会以为删成功了），重扫失败就只能等手动刷新。
+          if (typeof reloadSkills === 'function') {
+            try { await reloadSkills({ reason: 'delete-failed' }); } catch { /* 恢复失败不影响 500 语义 */ }
+          }
+          log(`[skill] 删除 ${id} 失败：${error?.stack ?? error?.message ?? error}`);
+          return json(res, 500, { ok: false, error: `删除目录失败：${String(error?.message ?? error)}` });
+        }
+        if (!removal?.ok) {
+          // 二次校验没通过（校验与 rm 之间目录被换成符号链接、或被别的进程删掉等
+          // 竞态）：removeExtensionDir 在校验失败时**不抛错而是返回**，这里必须接住，
+          // 否则会把"什么都没删"谎报成 200。磁盘没动，恢复内存态并按 409 返回。
+          if (typeof reloadSkills === 'function') {
+            try { await reloadSkills({ reason: 'delete-aborted' }); } catch { /* ignore */ }
+          }
+          log(`[skill] 删除 ${id} 已中止（二次校验未通过）：${removal?.error || ''}`);
+          return json(res, 409, { ok: false, error: removal?.error || '目录校验未通过，已放弃删除' });
+        }
+
+        // 目录已删掉，才清 config.skills[id] 的残留（开关状态 / 各 Skill 设置）。
+        // 只有确实存在这个键才写配置，避免每次删除都触发一次无意义的落盘。
+        const skillsCfg = getConfig()?.skills || {};
+        const removedConfig = Object.prototype.hasOwnProperty.call(skillsCfg, id);
+        try {
+          if (removedConfig) {
+            const next = { ...skillsCfg };
+            delete next[id];
+            // deepMerge 传 {} 删不掉已有键，必须用 __replace__ 整体替换（同 /api/skills/cleanup）
+            updateConfig({ skills: { __replace__: next } });
+          }
+        } catch (error) {
+          // 极端情况（配置只读/磁盘满）：目录已删但配置没清干净。
+          // 如实报 500 而不是伪装成功 —— 残留配置会在 GET /api/skills 的
+          // uninstalled 列表里出现，可用 /api/skills/cleanup 清掉。
+          // 内存态要跟着磁盘走：先重扫（目录已不在，不会把它复活），
+          // 避免 UI 还挂着已删条目的工具与状态。
+          log(`[skill] 删除 ${id} 的配置失败：${error?.stack ?? error?.message ?? error}`);
+          emit('status', { configUpdated: true });
+          if (typeof reloadSkills === 'function') {
+            try { await reloadSkills({ reason: 'delete-config-failed' }); } catch { /* ignore */ }
+          }
+          return json(res, 500, { ok: false, error: `目录已删除，但清理配置失败：${String(error?.message ?? error)}` });
+        }
+
+        emit('status', { configUpdated: true });
+        // 重扫失败不影响删除结果：目录与配置都已落定，下次启动 / 手动刷新会自愈，
+        // 所以这里只记日志，仍然返回 200（用户要的"删掉"已经做到了）。
+        if (typeof reloadSkills === 'function') {
+          try { await reloadSkills({ reason: 'delete' }); } catch (error) {
+            log(`[skill] 删除 ${id} 后重扫失败（不影响删除结果）：${error?.message ?? error}`);
+          }
+        }
+        return json(res, 200, {
+          ok: true,
+          id,
+          // dir 返回仓库相对路径（relDir）：绝对路径暴露本机安装位置，也只是给 UI 显示
+          dir: skill.relDir || '',
+          removedConfig,
           config: sanitizeConfig(getConfig())
         });
       }

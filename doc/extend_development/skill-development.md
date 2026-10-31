@@ -418,6 +418,7 @@ export function dispose() { /* 卸载/热重载时最后清理 */ }
 - 监听 `skills/` 与 `plugins/`
 - 重载后自动：重跑激活 → 刷新工具定义 → 推送状态到 UI
 - 删除目录 → 下一次重扫把它卸掉（清理幽灵残留）
+- 也可以直接在控制台「技能」页操作：每张卡片右侧的 🗑 删除按钮会**永久删除** `skills/<id>/` 目录，并清掉 `config.skills[id]` 里该技能的开关/设置（确认弹窗会先说明目录位置）。删除后无需重启，热重载会重扫并广播状态
 
 配置项：`config.extensions.hotReload`（默认 `true`）。
 环境变量 `QQ_AGENT_DEV=1` 可强制打开。
