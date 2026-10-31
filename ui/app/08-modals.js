@@ -199,7 +199,7 @@ function openPersonaPicker() {
         $('#cfg-roletext')?.dispatchEvent(new Event('input', { bubbles: true }));
       }
       closeModelModal(overlay);
-      syncPersonaButtons();
+      syncPersonaHint();
     });
   });
   overlay.querySelector('#persona-cancel').addEventListener('click', () => closeModelModal(overlay));
@@ -253,6 +253,76 @@ function openPersonaCreateModal() {
       $('#persona-pick-hint').textContent = `添加失败：${e.message}`;
     }
   });
+}
+
+/**
+ * 人设库管理：列出全部人设模板，自定义人设可以删除。
+ *
+ * 为什么单独做成一个弹窗（2026-10-31）：
+ *   - 原来唯一的删除入口是统一人设编辑器里的隐藏按钮，只有"当前角色设定与某个
+ *     自定义模板逐字相同"时才出现；关掉"统一人设"（分群模式）后整个编辑器都不在
+ *     DOM 里，界面上就只剩「＋ 添加人设」。
+ *   - 而且那个按钮的用法是"先选中要删的人设"——选中会覆盖当前角色设定并自动保存，
+ *     删完再重置成内置人设，等于用一次删除毁掉正在用的配置。
+ * 这里改成"列表 + 逐行删除"：不碰任何 roleText，删除只把人设从模板库移除。
+ * 入口：人设页标题旁「🗂 管理人设」、全局人设设置 / 会话独立人设弹窗里的「🗂 管理」。
+ */
+function openPersonaManagerModal() {
+  const overlay = modelModalShell({
+    head: '人设库管理',
+    body: `
+      <div class="model-modal-right" id="pm-list" style="flex:1;min-width:0"></div>
+      <div class="hint" id="pm-hint" style="margin-top:8px">删除只把自定义人设从模板库移除；正在使用它的会话不会换人设（角色设定文本存在各自的配置里）。</div>`,
+    foot: `<button class="btn" id="pm-close">关闭</button>`
+  });
+  const listEl = overlay.querySelector('#pm-list');
+  const hintEl = overlay.querySelector('#pm-hint');
+
+  const renderList = () => {
+    const entries = Object.entries(state.personaTemplates || {});
+    if (!entries.length) {
+      listEl.innerHTML = '<div class="muted" style="padding:12px">人设库为空。</div>';
+      return;
+    }
+    listEl.innerHTML = entries.map(([id, p]) => `
+      <div class="mm-model" data-id="${esc(id)}" style="cursor:default">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
+        <span class="muted" style="font-size:11px">${p.builtin ? '内置' : '自定义'}</span>
+        ${p.builtin ? '' : `<button class="mm-del" type="button" data-id="${esc(id)}" data-name="${esc(p.name)}">删除</button>`}
+      </div>`).join('');
+  };
+
+  // 重新拉模板库（删一个后 custom_N 的序号会整体前移，不能只在本地 splice）
+  const reloadTemplates = async () => {
+    const d = await api('/api/persona-templates').catch(() => ({ templates: [] }));
+    state.personaTemplates = {};
+    for (const t of d.templates || []) {
+      state.personaTemplates[t.id] = { name: t.name, text: t.text, customRules: t.customRules || '', builtin: !!t.builtin };
+    }
+  };
+
+  listEl.addEventListener('click', async (e) => {
+    const btn = e.target?.closest?.('.mm-del');
+    if (!btn || btn.disabled) return;
+    const { id, name } = btn.dataset;
+    if (!(await uiConfirm(`确定删除自定义人设「${name}」？`))) return;
+    btn.disabled = true;
+    try {
+      await api(`/api/persona-templates/${encodeURIComponent(id)}`, { method: 'DELETE', body: '{}' });
+      await reloadTemplates();
+      renderList();
+      hintEl.textContent = `已删除「${name}」。`;
+      // 人设页的选择器名字/提示跟着更新；本弹窗挂在 body 上，不受这次重渲染影响。
+      renderSettings();
+      syncPersonaHint();
+    } catch (err) {
+      btn.disabled = false;
+      hintEl.textContent = `删除失败：${err.message}`;
+    }
+  });
+
+  overlay.querySelector('#pm-close').addEventListener('click', () => closeModelModal(overlay));
+  renderList();
 }
 
 /**

@@ -200,6 +200,7 @@ const MODALS = [
   ['用量下钻', 'openUsageBreakdown', ['model', 'm0'], null],
   ['人设选择器', 'openPersonaPicker', [], 'persona'],
   ['人设新建', 'openPersonaCreateModal', [], 'persona'],
+  ['人设库管理', 'openPersonaManagerModal', [], 'persona'],
   ['全局人设设置', 'openGlobalPersonaModal', [], 'persona'],
   ['模型选择器', 'openModelPicker', [], 'api'],
   ['记忆模型选择器', 'openMemoryModelPicker', [], 'memory'],

@@ -434,7 +434,11 @@ async function loadSettings() {
   state.skills = skillsData.skills || [];
   state.skillsSummary = skillsData.summary || {};
   state.uninstalledSkills = skillsData.uninstalled || [];
-  for (const t of tplData.templates || []) state.personaTemplates[t.id] = { name: t.name, text: t.text, builtin: !!t.builtin };
+  for (const t of tplData.templates || []) {
+    // customRules 必须带上：选择人设时会写回「管理员附加规则」输入框，
+    // 这里丢了它等于每次选中自定义人设都把它的附加规则清成空（静默丢配置）。
+    state.personaTemplates[t.id] = { name: t.name, text: t.text, customRules: t.customRules || '', builtin: !!t.builtin };
+  }
   // 提示词预览与配置并行拉取；渲染时可能还没到（先显示占位，到达后原地替换）
   refreshPromptPreview(cfg);
   renderSettings();
@@ -713,6 +717,10 @@ function openBatchPriceModal() {
 function renderPersonaPicker(c) {
   const currentId = Object.entries(state.personaTemplates || {}).find(([, p]) => p.text === (c.persona?.roleText || ''))?.[0] || '';
   const currentName = state.personaTemplates[currentId]?.name || '';
+  // 删除入口统一走标题旁的「管理人设」列表（openPersonaManagerModal）：
+  // 不再用这里那个"只在当前文本与某个自定义模板逐字相同时才出现"的隐藏按钮 ——
+  // 它既要求用户先把要删的人设选进角色设定（覆盖掉正在用的那套），
+  // 又因为 08 段调用了 bindSettingsEvents 内部的局部函数而永远显示不出来。
   return `
     <div class="field-row" style="align-items:flex-end">
       <div class="field">
@@ -720,11 +728,25 @@ function renderPersonaPicker(c) {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input type="text" id="cfg-persona-pick" class="inp persona-pick" readonly placeholder="点击选择人设" value="${esc(currentName)}" style="flex:1;min-width:160px;cursor:pointer" />
           <button class="btn btn-small" id="new-persona-btn">＋ 添加人设</button>
-          <button class="btn btn-small btn-danger hidden" id="del-persona-btn">删除当前自定义人设</button>
         </div>
         <span id="persona-pick-hint" class="muted" style="font-size:12px"></span>
       </div>
     </div>`;
+}
+
+/**
+ * 刷新「选择人设」下方的提示（内置 / 自定义 / 未匹配任何模板）。
+ * 全局函数：07 的 bindSettingsEvents 与 08 的人设选择器都要调用，
+ * 所以不能像以前那样定义在 bindSettingsEvents 内部（跨段调用会 ReferenceError，
+ * 而选择器里的调用点被 closeModelModal 之后的异常吞掉，表现为"选完人设没反应"）。
+ */
+function syncPersonaHint() {
+  const roleText = $('#cfg-roletext')?.value ?? '';
+  const id = Object.entries(state.personaTemplates || {}).find(([, p]) => p.text === roleText)?.[0] || '';
+  const tpl = state.personaTemplates[id];
+  const hint = $('#persona-pick-hint');
+  if (hint) hint.textContent = tpl ? (tpl.builtin ? '内置人设' : '自定义人设') : '';
+  return id;
 }
 
 function renderHealthCard() {

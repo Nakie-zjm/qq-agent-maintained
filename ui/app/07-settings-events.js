@@ -819,49 +819,18 @@ function bindSettingsEvents(c) {
 
   // ── 人设区块事件 ──
   const personaPick = $('#cfg-persona-pick');
-  function currentPersonaId() {
-    const roleText = $('#cfg-roletext')?.value ?? '';
-    const found = Object.entries(state.personaTemplates || {}).find(([, p]) => p.text === roleText);
-    return found ? found[0] : '';
-  }
-  function syncPersonaButtons(animate = true) {
-    const id = currentPersonaId();
-    const tpl = state.personaTemplates[id];
-    const isCustom = id.startsWith('custom_');
-    const delBtn = $('#del-persona-btn');
-    if (delBtn) {
-      if (isCustom) uiShow(delBtn, () => delBtn.classList.remove('hidden'), animate);
-      else uiHide(delBtn, () => delBtn.classList.add('hidden'), animate);
-    }
-    const hint = $('#persona-pick-hint');
-    if (hint) hint.textContent = tpl ? (tpl.builtin ? '内置人设' : '自定义人设') : '';
-  }
   if (personaPick) {
     personaPick.addEventListener('click', () => openPersonaPicker());
   }
   const newPersonaBtn = $('#new-persona-btn');
   if (newPersonaBtn) newPersonaBtn.addEventListener('click', () => openPersonaCreateModal());
-  const delPersonaBtn = $('#del-persona-btn');
-  if (delPersonaBtn) delPersonaBtn.addEventListener('click', async () => {
-    const id = currentPersonaId();
-    if (!id.startsWith('custom_')) return;
-    const tpl = state.personaTemplates[id];
-    if (!tpl) return;
-    if (!(await uiConfirm(`确定删除自定义人设「${tpl.name}」？`))) return;
-    try {
-      await api(`/api/persona-templates/${id}`, { method: 'DELETE', body: '{}' });
-      $('#cfg-roletext').value = state.personaTemplates.xiaojingyu?.text || '';
-      $('#cfg-customrules').value = '';
-      // 删除 = 表单值被程序化改回默认人设：同样派发 input 触发自动保存，
-      // 否则"删完切走"后配置里还是被删掉的那套角色设定（保存从未发起）。
-      $('#cfg-roletext')?.dispatchEvent(new Event('input', { bubbles: true }));
-      await loadSettings();
-    } catch (e) {
-      $('#persona-pick-hint').textContent = `删除失败：${e.message}`;
-    }
-  });
-  
-  syncPersonaButtons(false);   // 初始装填不播动画（重渲染后是全新节点）
+  // 人设库管理（查看 / 删除自定义人设）：统一与分群两种模式下都常驻在标题旁。
+  // 老实现是"当前角色设定逐字命中某个自定义模板才出现的隐藏删除按钮"，
+  // 分群模式（personaUnified=false）下连编辑器都不渲染，界面上就只剩添加。
+  const managePersonaBtn = $('#manage-personas-btn');
+  if (managePersonaBtn) managePersonaBtn.addEventListener('click', () => openPersonaManagerModal());
+
+  syncPersonaHint();   // 初始装填（重渲染后是全新节点，不需要动画）
 
   // ── 白名单区块事件 ──
   const pickGroupsBtn = $('#pick-groups-btn');

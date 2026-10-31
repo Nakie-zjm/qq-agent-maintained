@@ -436,7 +436,10 @@ function renderPersonaSection(c) {
   }).join('');
 
   return `
-    <h3>人设</h3>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <h3 style="margin:0">人设</h3>
+      <button class="btn btn-small" id="manage-personas-btn" title="查看全部人设，删除不需要的自定义人设">🗂 管理人设（可删除）</button>
+    </div>
     <div class="checkbox-row"><input type="checkbox" id="cfg-persona-unified" ${unified ? 'checked' : ''} />
       <label for="cfg-persona-unified">为所有的群聊/私聊使用同一个人设</label></div>
     <div class="hint" style="margin-bottom:12px">${unified
@@ -468,6 +471,7 @@ function openGlobalPersonaModal() {
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <input type="text" id="gp-pick" readonly placeholder="点击选择人设" value="${esc(Object.values(state.personaTemplates || {}).find((p) => p.text === (per.roleText || ''))?.name || '')}" style="flex:1;cursor:pointer" />
         <button class="btn btn-small" id="gp-new-btn">＋ 添加人设</button>
+        <button class="btn btn-small" id="gp-manage-btn" title="查看全部人设，删除不需要的自定义人设">🗂 管理</button>
       </div>
       <div class="field-row">
         <div class="field"><label>机器人名字</label><input type="text" id="gp-botname" value="${esc(per.botName || '')}" /></div>
@@ -522,6 +526,9 @@ function openGlobalPersonaModal() {
   overlay.querySelector('#gp-new-btn').addEventListener('click', () => {
     openPersonaCreateModal();
   });
+  overlay.querySelector('#gp-manage-btn').addEventListener('click', () => {
+    openPersonaManagerModal();
+  });
 
   overlay.querySelector('#gp-cancel').addEventListener('click', () => closeModelModal(overlay));
   overlay.querySelector('#gp-save').addEventListener('click', async () => {
@@ -560,6 +567,7 @@ function openPerChatPersonaModal(chatKey) {
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <input type="text" id="pcp-pick" readonly placeholder="点击选择人设" value="${esc(conf.roleText ? (Object.values(state.personaTemplates || {}).find((p) => p.text === conf.roleText)?.name || '自定义') : '')}" style="flex:1;cursor:pointer" />
         <button class="btn btn-small" id="pcp-new-btn">＋ 添加人设</button>
+        <button class="btn btn-small" id="pcp-manage-btn" title="查看全部人设，删除不需要的自定义人设">🗂 管理</button>
       </div>
       <div class="field"><label>参与度（留空跟随全局）</label>
         <select id="pcp-participation">
@@ -612,6 +620,9 @@ function openPerChatPersonaModal(chatKey) {
   overlay.querySelector('#pcp-new-btn').addEventListener('click', () => {
     // 复用统一编辑器的添加流程：加完模板直接填进本会话的角色设定
     openPersonaCreateModal();
+  });
+  overlay.querySelector('#pcp-manage-btn').addEventListener('click', () => {
+    openPersonaManagerModal();
   });
 
   // 直接 POST 落盘：不走"写隐藏 JSON + 等表单链保存"的老路。
