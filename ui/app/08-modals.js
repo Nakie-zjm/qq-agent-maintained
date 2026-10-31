@@ -353,7 +353,7 @@ function openModelConfigModal() {
       <div class="field-row">
         <div class="field"><label>当前 Base URL</label>
           <input type="text" id="mc-baseurl" readonly value="${esc(c.api?.baseUrl || '')}" /></div>
-        <div class="field"><label>当前 API Key</label>
+        <div class="field"><label>当前 API Key<span id="mc-apikey-owner" class="muted" style="font-weight:400;font-size:11px">${currentProvider ? `（${esc(currentProvider.displayName || currentProvider.id)}）` : '（手动模式）'}</span></label>
           <div style="display:flex;gap:8px">
             <input type="password" id="mc-apikey" value="${esc((currentProvider ? currentProvider.hasKey : Boolean(c.api?.apiKey)) ? '******' : '')}" placeholder="输入新 Key 可替换；留空保持不变" autocomplete="new-password" style="flex:1" />
             <button class="btn btn-small" id="mc-apikey-toggle" type="button">显示</button>
@@ -390,6 +390,35 @@ function openModelConfigModal() {
            <button class="btn" id="mc-cancel">取消</button>
            <button class="btn btn-primary" id="mc-save">保存</button>`
   });
+
+  // ── 「表单当前指向哪个提供商」的唯一口径（2026-10-31 修）──
+  // 用户可以在下面的「选择模型」里挑别的提供商的模型；一旦挑过，表单里的
+  // Base URL / API Key / 测试 / 保存都必须跟着**挑中的那个**走，不能再用
+  // 打开弹窗时的 c.api.provider。曾经只换了 Base URL、Key 还是上一个提供商的，
+  // 两家都叫 deepseek-flash 时完全看不出来 —— 用户以为换了提供商，实际发请求
+  // 用的是旧 Key（401），或者把新 Key 存到了旧提供商身上。
+  const pickedPid = () => {
+    const picked = overlay.querySelector('#mc-picked')?.value || '';
+    return picked ? picked.split('|||')[0] : String(c.api?.provider || '');
+  };
+  const providerOf = (pid) => (state.providers || []).find((p) => p.id === pid) || null;
+
+  /**
+   * Key 输入框跟随"表单当前指向的提供商"：有 Key 显示掩码，没有就留空；
+   * 标题后缀同步显示提供商名 —— 两个提供商配了同名模型时，光看 Base URL
+   * 很容易以为 Key 也换了，把归属写出来才不会有歧义。
+   */
+  const syncKeyField = (pid) => {
+    const input = overlay.querySelector('#mc-apikey');
+    const toggleBtn = overlay.querySelector('#mc-apikey-toggle');
+    const owner = overlay.querySelector('#mc-apikey-owner');
+    const p = providerOf(pid);
+    input.type = 'password';
+    input.value = (p ? p.hasKey : Boolean(c.api?.apiKey)) ? '******' : '';
+    input.placeholder = '输入新 Key 可替换；留空保持不变';
+    toggleBtn.textContent = '显示';
+    if (owner) owner.textContent = p ? `（${p.displayName || p.id}）` : '（手动模式）';
+  };
 
   // 视觉能力扫描：POST /api/vision/scan（202 异步），进度经 SSE vision-scan
   // 事件写 #mc-vision-hint（02-sse-sessions.js 监听），完成后监听器自动刷新
@@ -441,6 +470,8 @@ function openModelConfigModal() {
         overlay.querySelector('#mc-model-pick').value = (names[el.dataset.model] || el.dataset.model);
         overlay.querySelector('#mc-picked').value = `${activePid}|||${el.dataset.model}`;
         overlay.querySelector('#mc-baseurl').value = p.baseURL || '';
+        // Key 必须跟着切换：挑的是 B 的模型，Key 框就得显示 B 的 Key 状态。
+        syncKeyField(activePid);
         closeModelModal(pickOverlay);
       }));
     };
@@ -505,36 +536,40 @@ function openModelConfigModal() {
   });
 
   // Key 显示/清除：与主页面同款（fetchRealKey 走 /api/providers/key）
+  // ⚠️ 一律按 pickedPid() 取：挑了别的提供商的模型之后，这里再按 c.api.provider
+  //    就会显示/清除**上一个**提供商的 Key（用户以为在操作 B，其实动了 A）。
   overlay.querySelector('#mc-apikey-toggle').addEventListener('click', async () => {
     const input = overlay.querySelector('#mc-apikey');
     const btn = overlay.querySelector('#mc-apikey-toggle');
+    const pid = pickedPid();
     const show = input.type === 'password';
     if (show) {
       try {
-        const pid = c.api?.provider;
         const r = pid ? await api(`/api/providers/key?providerId=${encodeURIComponent(pid)}`) : await api('/api/api-key');
         input.type = 'text';
         input.value = String(r.apiKey || '（无）');
         btn.textContent = '隐藏';
       } catch (e) { alert(`读取密钥失败：${e.message}`); }
     } else {
-      input.type = 'password';
-      input.value = '******';
-      btn.textContent = '显示';
+      // 收起：按当前提供商是否有 Key 决定显示掩码还是留空（手动模式看顶层 api.apiKey）
+      syncKeyField(pid);
     }
   });
   overlay.querySelector('#mc-apikey-clear').addEventListener('click', async () => {
-    if (!(await uiConfirm('确定清除已保存的 API Key？'))) return;
+    const pid = pickedPid();
+    const who = providerOf(pid)?.displayName || pid;
+    if (!(await uiConfirm(pid ? `确定清除「${who}」已保存的 API Key？` : '确定清除已保存的 API Key？'))) return;
     try {
-      const pid = c.api?.provider;
       if (pid) {
         await api('/api/providers/set-key', { method: 'POST', body: JSON.stringify({ providerId: pid, apiKey: '' }) });
       } else {
         await api('/api/config', { method: 'POST', body: JSON.stringify({ api: { apiKey: '' } }) });
       }
       const input = overlay.querySelector('#mc-apikey');
+      input.type = 'password';
       input.value = '';
       input.placeholder = '输入新 Key 可替换';
+      overlay.querySelector('#mc-apikey-toggle').textContent = '显示';
       await loadSettings();
     } catch (e) { alert(`清除失败：${e.message}`); }
   });
@@ -547,11 +582,20 @@ function openModelConfigModal() {
     btn.textContent = '测试中…';
     out.textContent = '';
     try {
+      const pid = pickedPid();
       const picked = overlay.querySelector('#mc-picked').value;
       const model = picked ? picked.split('|||')[1] : (c.api?.model || '');
       const keyInput = overlay.querySelector('#mc-apikey');
       const raw = (keyInput.value || '').trim();
-      const apiKey = (raw && raw !== '******') ? raw : '';
+      let apiKey = (raw && raw !== '******') ? raw : '';
+      if (!apiKey && pid) {
+        // 掩码/留空 = 用这个提供商**自己**保存的 Key。后端 test-chat 收不到 Key 时
+        // 回落"当前配置的提供商"—— 切换提供商后会把 A 的 Key 发到 B 的端点，
+        // 明明配置正确也报 401。
+        try {
+          apiKey = String((await api(`/api/providers/key?providerId=${encodeURIComponent(pid)}`)).apiKey || '');
+        } catch { /* 读不到明文就按"无 Key"测，结论由后端给 */ }
+      }
       const r = await api('/api/providers/test-chat', {
         method: 'POST',
         body: JSON.stringify({ baseUrl: overlay.querySelector('#mc-baseurl').value.trim(), apiKey, model })
@@ -591,9 +635,12 @@ function openModelConfigModal() {
     // ⚠️ 有选中提供商时必须写进**该提供商的 Key**（/api/providers/set-key）：
     //    resolveApiKey 的优先级是「提供商 Key > 顶层 api.apiKey」，写顶层会被提供商里
     //    那把旧 Key 盖掉 —— 这正是"换了 Key 却一直用旧的、只能删提供商重加"的根因。
+    // ⚠️ 写哪个提供商必须是 pickedPid()：用户可以在本次弹窗里改选别的提供商的模型，
+    //    按打开弹窗时的 c.api.provider 写，会把新 Key 存到**上一个**提供商身上
+    //    （旧提供商被悄悄换 Key，新提供商反而没有 Key）。
     const raw = (overlay.querySelector('#mc-apikey').value || '').trim();
     const enteredKey = (raw && raw !== '******') ? raw : '';
-    const keyPid = String(c.api?.provider || '');
+    const keyPid = pickedPid();
     if (enteredKey && !keyPid) patch.apiKey = enteredKey;
     try {
       if (enteredKey && keyPid) {
