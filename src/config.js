@@ -221,9 +221,13 @@ export const DEFAULT_CONFIG = {
   // 主动开话题（可选）
   proactive: {
     enabled: false,
+    groupEnabled: true,         // 群聊里主动开口（默认开，保持原行为）
+    privateEnabled: false,      // 私聊里主动开口（默认关）
+    groupTargets: '',           // 只对这些群号主动（逗号分隔；留空 = 白名单里的群）
+    privateTargets: '',         // 只对这些 QQ 号主动（逗号分隔；留空 = 白名单里的私聊）
     checkIntervalMinMs: 1800000,
     checkIntervalMaxMs: 5400000,
-    idleThresholdMs: 1800000,   // 群里静默多久才算"冷场"
+    idleThresholdMs: 1800000,   // 会话静默多久才算"冷场"
     probability: 0.25
   },
   // 活跃模式（chatActive）：1/2/3 档被召唤触发响应后，模型若认为话题值得持续参与，

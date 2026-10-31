@@ -866,7 +866,7 @@ export class Orchestrator {
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: proactive
-        ? `${userPrompt}\n\n【未读信息】（主动机会）群里已经安静了一会儿。你可以主动抛一个自然的话题（像随口说的，不要像播报），也可以判断没必要说话就安静结束。`
+        ? `${userPrompt}\n\n【未读信息】（主动机会）${kind === 'private' ? '对方已经安静了一会儿' : '群里已经安静了一会儿'}。你可以主动抛一个自然的话题（像随口说的，不要像播报），也可以判断没必要说话就安静结束。`
         : userPrompt }
     ];
 
@@ -1363,7 +1363,7 @@ export class Orchestrator {
       if (this.aborted || this.paused || cfg.proactive?.enabled !== true) return;
       if (this.runningChats.size >= Math.max(1, Number(cfg.maxConcurrentRuns) || 2)) return;
       if (Math.random() > (Number(cfg.proactive?.probability) || 0.25)) return;
-      // 挑一个"安静且允许"的群
+      // 挑一个"安静且允许"的会话（群聊 / 私聊按各自的开关）
       const candidates = this.#proactiveCandidates(cfg);
       if (!candidates.length) return;
       const chatKey = candidates[Math.floor(Math.random() * candidates.length)];
@@ -1374,12 +1374,33 @@ export class Orchestrator {
 
   #proactiveCandidates(cfg) {
     const idleMs = Math.max(300000, Number(cfg.proactive?.idleThresholdMs) || 1800000);
+    const groupEnabled = cfg.proactive?.groupEnabled !== false;
+    const privateEnabled = cfg.proactive?.privateEnabled === true;
     const allowGroups = (cfg.allow?.groups ?? []).map(String);
+    const allowPrivate = (cfg.allow?.private ?? []).map(String);
+    // 主动专用的群号 / QQ 号名单（逗号分隔）：填了之后只对名单里的会话主动，
+    // 留空则沿用上面的白名单。注意白名单仍然生效 —— 名单里的人不在白名单里，
+    // 发送会被拦下，不如一开始就不选它。
+    const parseIds = (raw) => String(raw ?? '')
+      .split(/[\s,，;；]+/)
+      .map((part) => part.trim())
+      .filter((part) => /^\d{1,20}$/.test(part));
+    const groupTargets = parseIds(cfg.proactive?.groupTargets);
+    const privateTargets = parseIds(cfg.proactive?.privateTargets);
     const out = [];
     for (const chatKey of this.store.listChats()) {
       const [kind, id] = chatKey.split(':');
-      if (kind !== 'group') continue;
-      if (allowGroups.length > 0 ? !allowGroups.includes(id) : !cfg.allowAllWhenEmpty) continue;
+      if (kind === 'group') {
+        if (!groupEnabled) continue;
+        if (allowGroups.length > 0 ? !allowGroups.includes(id) : !cfg.allowAllWhenEmpty) continue;
+        if (groupTargets.length > 0 && !groupTargets.includes(id)) continue;
+      } else if (kind === 'private') {
+        if (!privateEnabled) continue;
+        if (allowPrivate.length > 0 ? !allowPrivate.includes(id) : !cfg.allowAllWhenEmpty) continue;
+        if (privateTargets.length > 0 && !privateTargets.includes(id)) continue;
+      } else {
+        continue;
+      }
       const meta = this.store.getChatMeta(chatKey);
       if (meta.unread > 0) continue;
       if (Date.now() - meta.lastTs < idleMs) continue;

@@ -1524,17 +1524,9 @@ async function saveConfig({ quiet = false } = {}) {
       maxPerMinute: Number(val('#sc-maxpermin', c.send?.maxPerMinute ?? 80)) || 80,
       maxPerHour: Number(val('#sc-maxperhour', c.send?.maxPerHour ?? 500)) || 500
     };
-    patch.proactive = {
-      ...(c.proactive || {}),
-      enabled: chk('#cfg-proactive', !!c.proactive?.enabled),
-      // 兜底值与后端三处口径统一（DEFAULT_CONFIG / orchestrator 读取链）：
-      // 曾经这里兜底 60000/120000/0.1，后端默认 1800000/5400000/0.25 ——
-      // 用户清空输入框后一次保存就把"出厂 30~90 分钟一次、25% 概率"
-      // 静默改写成"1~2 分钟一次、10% 概率"（主动开话题突然变高频）。
-      checkIntervalMinMs: Number(val('#cfg-pro-min', c.proactive?.checkIntervalMinMs)) || 1800000,
-      checkIntervalMaxMs: Number(val('#cfg-pro-max', c.proactive?.checkIntervalMaxMs)) || 5400000,
-      probability: Number(val('#cfg-pro-prob', c.proactive?.probability ?? 0.25)) || 0.25
-    };
+    // 主动开话题不走这里的自动保存：它整块是"草稿 + 保存按钮"（collectProactivePatch /
+    // saveProactiveConfig）。这里塞 patch.proactive 会在改别的聊天设置时把未保存的
+    // 主动设置一起写掉，等于又变成自动保存。
     patch.sticker = {
       ...(c.sticker || {}),
       enabled: chk('#cfg-sticker', !!c.sticker?.enabled),
@@ -1610,4 +1602,63 @@ async function saveConfig({ quiet = false } = {}) {
   state.config = data.config;
   if (!quiet) $('#model-label').textContent = `模型：${state.config.api.model || '未设置'}`;
   return data;
+}
+
+/**
+ * 主动开话题：从表单收集一个独立 patch。
+ *
+ * 这块不走表单自动保存（见 saveConfig 里的注释）：界面上按分钟填，落盘仍用
+ * 毫秒；兜底值从当前配置反推，清空输入框时不会被静默改成别的频率。
+ */
+function collectProactivePatch() {
+  const c = state.config || {};
+  const el = (sel) => document.querySelector(sel);
+  const val = (sel, fallback = '') => {
+    const node = el(sel);
+    return node ? node.value : fallback;
+  };
+  const chk = (sel, fallback = false) => {
+    const node = el(sel);
+    return node ? node.checked : fallback;
+  };
+  const fallbackMin = Math.max(1, Math.round((Number(c.proactive?.checkIntervalMinMs) || 1800000) / 60000));
+  const fallbackMax = Math.max(fallbackMin, Math.round((Number(c.proactive?.checkIntervalMaxMs) || 5400000) / 60000));
+  const proMinMinutes = Math.max(1, Math.round(Number(val('#cfg-pro-min', fallbackMin)) || fallbackMin));
+  const proMaxMinutes = Math.max(proMinMinutes, Math.max(2, Math.round(Number(val('#cfg-pro-max', fallbackMax)) || fallbackMax)));
+  return {
+    ...(c.proactive || {}),
+    enabled: chk('#cfg-proactive', !!c.proactive?.enabled),
+    groupEnabled: chk('#cfg-pro-group', c.proactive?.groupEnabled !== false),
+    privateEnabled: chk('#cfg-pro-private', c.proactive?.privateEnabled === true),
+    groupTargets: String(val('#cfg-pro-grouptargets', c.proactive?.groupTargets || '')).trim(),
+    privateTargets: String(val('#cfg-pro-privatetargets', c.proactive?.privateTargets || '')).trim(),
+    checkIntervalMinMs: proMinMinutes * 60000,
+    checkIntervalMaxMs: proMaxMinutes * 60000,
+    probability: Number(val('#cfg-pro-prob', c.proactive?.probability ?? 0.25)) || 0.25
+  };
+}
+
+/** 点「保存主动设置」：只提交 proactive 这一块，不动其它设置。 */
+async function saveProactiveConfig() {
+  // 保存期间挡住整页重渲染（与自动保存同款守卫），避免刚提交的值被旧 state 重建冲掉
+  beginSettingsGuard();
+  try {
+    const data = await api('/api/config', {
+      method: 'POST',
+      body: JSON.stringify({ proactive: collectProactivePatch() })
+    });
+    if (data?.config) state.config = data.config;
+    // 上下限会被后端/收集函数夹过（比如上限填得比下限小），把实际落盘值写回输入框，
+    // 避免界面显示的和真正生效的不一致。
+    const saved = state.config?.proactive;
+    if (saved) {
+      const minEl = document.querySelector('#cfg-pro-min');
+      const maxEl = document.querySelector('#cfg-pro-max');
+      if (minEl) minEl.value = String(Math.round((Number(saved.checkIntervalMinMs) || 1800000) / 60000));
+      if (maxEl) maxEl.value = String(Math.round((Number(saved.checkIntervalMaxMs) || 5400000) / 60000));
+    }
+    return data;
+  } finally {
+    endSettingsGuard();
+  }
 }

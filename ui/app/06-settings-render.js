@@ -917,14 +917,30 @@ return `
       id: 'card-proactive',
       icon: '💬',
       title: '主动开话题',
-      sub: '冷场时按概率主动开话题',
+      sub: '冷场时按概率主动开话题（群聊 / 私聊分别开关）',
       body: `
       <div class="checkbox-row"><input type="checkbox" id="cfg-proactive" ${c.proactive.enabled ? 'checked' : ''} />
         <label for="cfg-proactive">冷场时按概率主动开话题</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="cfg-pro-group" ${c.proactive.groupEnabled !== false ? 'checked' : ''} />
+        <label for="cfg-pro-group">群聊里主动开口</label></div>
+      <div class="checkbox-row"><input type="checkbox" id="cfg-pro-private" ${c.proactive.privateEnabled === true ? 'checked' : ''} />
+        <label for="cfg-pro-private">私聊里主动开口</label></div>
       <div class="field-row">
-        <div class="field"><label>检查间隔下限（毫秒）</label><input type="number" id="cfg-pro-min" min="60000" value="${esc(c.proactive.checkIntervalMinMs)}" /></div>
-        <div class="field"><label>检查间隔上限（毫秒）</label><input type="number" id="cfg-pro-max" min="120000" value="${esc(c.proactive.checkIntervalMaxMs)}" /></div>
+        <div class="field"><label>只对这些群号主动（逗号隔开，留空 = 白名单里的群）</label>
+          <input type="text" id="cfg-pro-grouptargets" value="${esc(c.proactive.groupTargets || '')}" placeholder="123456,789012" /></div>
+        <div class="field"><label>只对这些 QQ 号主动（逗号隔开，留空 = 白名单里的私聊）</label>
+          <input type="text" id="cfg-pro-privatetargets" value="${esc(c.proactive.privateTargets || '')}" placeholder="10001,10002" /></div>
+      </div>
+      <div class="hint">填了名单就只对名单里的会话主动；名单里的群/QQ 也要在聊天白名单里，否则发送会被拦下。</div>
+      <div class="field-row">
+        <div class="field"><label>检查间隔下限（分钟）</label><input type="number" id="cfg-pro-min" min="1" value="${esc(Math.round((Number(c.proactive.checkIntervalMinMs) || 1800000) / 60000))}" /></div>
+        <div class="field"><label>检查间隔上限（分钟）</label><input type="number" id="cfg-pro-max" min="2" value="${esc(Math.round((Number(c.proactive.checkIntervalMaxMs) || 5400000) / 60000))}" /></div>
         <div class="field"><label>触发概率 0~1</label><input type="number" id="cfg-pro-prob" step="0.05" min="0" max="1" value="${esc(c.proactive.probability)}" /></div>
+      </div>
+      <div class="hint">每轮检查在上下限之间随机取一个间隔；30~90 分钟就是出厂值。</div>
+      <div class="field" style="display:flex;gap:8px;align-items:center;margin-top:10px">
+        <button class="btn btn-primary" id="cfg-pro-save" type="button">保存主动设置</button>
+        <span class="hint">改完点这里保存；这一块不会自动保存。</span>
       </div>`
     })}
 

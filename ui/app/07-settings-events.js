@@ -45,6 +45,9 @@ function bindSettingsEvents(c) {
   let undoBtn = null;
 
   function markDirty(el) {
+    // 主动开话题整块是"草稿 + 保存按钮"：输入时不进自动保存队列，
+    // 否则改别的聊天设置时会把未保存的主动设置一起写掉。
+    if (el?.closest?.('#card-proactive')) return;
     const block = el?.closest?.('.field, .checkbox-row, .tier-param, .price-card, .tool-card, .settings-runstate, .prompt-preview-card, .persona-per-chat, .persona-chat-btn');
     if (block) dirtyEls.add(block);
     showUndoBtn();
@@ -917,4 +920,20 @@ function bindSettingsEvents(c) {
     }
     resetDataBtn.disabled = false;
   });
+
+  // ── 主动开话题：整块草稿，点「保存主动设置」才落盘 ──
+  const proSaveBtn = $('#cfg-pro-save');
+  if (proSaveBtn) {
+    proSaveBtn.addEventListener('click', async () => {
+      // 只防重复点击，不改按钮文字、不加任何状态提示
+      proSaveBtn.disabled = true;
+      try {
+        await saveProactiveConfig();
+      } catch (e) {
+        alert(`保存主动设置失败：${e.message}`);
+      } finally {
+        proSaveBtn.disabled = false;
+      }
+    });
+  }
 }
