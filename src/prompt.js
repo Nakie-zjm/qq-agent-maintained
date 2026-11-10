@@ -19,6 +19,8 @@ export { _sliderToTier as sliderToTier, _tierToSlider as tierToSlider, _TIER_SLI
 import { formatFullTime, formatShortTime } from './util.js';
 import { buildStickerContext } from './stickers.js';
 import { skillManager } from './skills/manager.js';
+// 私聊判定与私聊提示语：和 orchestrator 的兜底共用同一份定义，避免两处口径漂移。
+import { isPrivateChat } from './private-reply.js';
 
 // ── 系统提示 ─────────────────────────────────────────────────────────────
 
@@ -614,6 +616,9 @@ export function buildUserPrompt(ctx) {
   // 没配置时 personaForChat 原样返回全局 persona，行为与从前完全一致。
   // 与系统提示词共用同一来源 —— 两处不一致会让"系统里的角色"和"输入里的角色"打架。
   const chatPersona = personaForChat(ctx.chatKey);
+  // 私聊：有"必须回"的硬承诺（提示语 + orchestrator 兜底，见 src/private-reply.js）。
+  // 群聊不设这一条 —— "这轮不接话"在群里是正常选项。
+  const privateChat = isPrivateChat(ctx.chatKey);
   const now = Date.now();
   const excludeIds = ctx.triggerEntries.map((m) => m.id);
   // 读取条数由上下文档位决定（ctx.contextLimit 由 orchestrator 在唤醒时算好传来；
@@ -699,11 +704,15 @@ export function buildUserPrompt(ctx) {
   }
 
   // 引导说明
+  // 「不想说话」那条只给群聊：私聊里有人直接找你，"这轮不说话"不是选项。
+  // 这里写的是**程序承诺**（orchestrator 有兜底强制补发），不是性格建议，所以放在引导段。
   parts.push([
     '【引导说明】',
     '- 扫一眼【已读信息】【新已读信息】和【未读信息】，判断：有没有人在找你？有没有你能接的话题？值不值得说话？',
     '- 想说话：调用 send_message（要分条就传数组）。想引用就带 replyToMessageId：id 见【未读信息】每条前的 #数字、历史里带图消息的 #数字，或用 get_recent_messages 查，不要自己编。',
-    '- 不想说话：直接结束或调用 finish（一句话说明原因）。不回是正常选项，不是失职。',
+    privateChat
+      ? '- 这是私聊：对方直接找你，本轮必须用 send_message 回至少一条；没什么可说也回一句短的，不要留空。'
+      : '- 不想说话：直接结束或调用 finish（一句话说明原因）。不回是正常选项，不是失职。',
     '- 记得：你的普通文本输出不会发到 QQ，只有工具调用会。'
   ].join('\n'));
 
@@ -784,6 +793,19 @@ export function buildUserPrompt(ctx) {
   }
 
   // 参与度已并入系统提示的【该说/不该说】，这里不再重复。
+
+  // ── 私聊硬规则（放最末，离"当前时间"最近）────────────────────────────
+  // 只对私聊注入；这是整份提示词里唯一一处"必须发"的硬要求。
+  // 配合 orchestrator 的三级兜底（原句搬运 → 提醒重说 → 强制补发），
+  // 目标是"私聊不会再出现她一句话都没发出去、对方干等"的结果。
+  if (privateChat) {
+    parts.push([
+      '【私聊规则（硬性）】',
+      '1. 这是 1v1 私聊，消息就是发给你的，本轮必须用 send_message 发出至少一条。',
+      '2. 写正文不等于发送：正文到不了 QQ。想说什么，用工具说。',
+      '3. 确实没什么可说，也回一句短的（一个字、一句"嗯"都行），不要留空。'
+    ].join('\n'));
+  }
 
   // 【当前时间】放最末：精确到秒、每次必变 —— 放前面会把整个用户提示的
   // 缓存前缀打断（模型知道"现在"的时效性靠这里，内容本身不受段落顺序影响）。

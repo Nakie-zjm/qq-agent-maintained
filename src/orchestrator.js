@@ -19,6 +19,7 @@ import { currentProviders } from './providers.js';
 import { skillManager } from './skills/manager.js';
 import { getToolAvailability } from './tool-registry.js';
 import { rescueUnsentReply } from './reply-rescue.js';
+import { PRIVATE_NUDGE, splitReplyForFallback, looksLikePlanningText, looksLikeInnerThought } from './private-reply.js';
 
 export class Orchestrator {
   constructor({ store, memory, stickers, sender, sessions, onebot, emit = null, reminders = null, videoReader = null }) {
@@ -668,6 +669,10 @@ export class Orchestrator {
     live.finishReason = null;
     live.activity = '';
     live.inputMessages = [];
+    // 私聊兜底的两个标记也要复位：重试是一次全新的运行，
+    // 留着上一次的 nudged/fixed 会让新一轮直接跳到"强制补发"。
+    live.privateReplyNudged = false;
+    live.privateReplyFixed = null;
     live.usage = { promptTokens: 0, completionTokens: 0, cachedTokens: 0, totalTokens: 0, calls: 0 };
     this.sessions.update(session.id);
     this.emit('session-update', session.id);
@@ -727,6 +732,66 @@ export class Orchestrator {
       cap: (name) => this.#capFirst(name, skillContext),
       log: (message) => skillManager.recordError('reply-safety', message)
     });
+  }
+
+  /**
+   * 私聊最后一公里：模型整轮没发出消息（只调 finish，或一直写正文）时，强制补一条。
+   *
+   * 为什么"强制"能成立：把 tools 砍到**只剩 send_message**，并把 tool_choice 设成
+   * required —— 模型没有"只输出正文"或"调 finish 收工"这两个出口，只能发消息。
+   *
+   * 为什么放在循环外：走到这里说明正常循环已经用尽（含私聊提醒那一次），
+   * 再开一轮普通对话只会重复同样的失败；这里只要一句话，不需要完整上下文推理，
+   * 所以直接调工具执行，不再回到循环里（限频/去重/存档都在 sender + executeTool 里，
+   * 不另开旁路）。
+   *
+   * ⚠️ 这一步**故意不过 before-tool 钩子**：钩子的否决权会把它变回静默，
+   *    而"私聊必须有回复"正是本功能要保证的那条底线。其余守卫（限频/去重/存档）
+   *    都在 send_message 与 executeTool 内部，照常生效。
+   *
+   * @returns {Promise<boolean>} 是否真的发出了至少一条
+   */
+  async #forceSendPrivate({ session, messages, ctx, toolDefs, skillContext, signal, attempts = 2 }) {
+    const sendDef = (toolDefs || []).find((d) => d.id === 'send_message');
+    if (!sendDef) return false;
+    const tools = toOpenAiTools([sendDef]);
+    // 提醒用 user 角色追加在最后：即使模型这轮调过 finish，消息序列仍然合法
+    // （assistant → tool → user 是合法的；再有 assistant 也算新一轮对话）。
+    const reminder = {
+      role: 'user',
+      content: '【系统提醒】这是私聊，对方刚发来消息，还在等你回。'
+        + '现在用 send_message 回一句短的（按你平时的语气），不要解释，也不要提这条提醒。'
+    };
+    for (let i = 0; i < Math.max(1, attempts); i += 1) {
+      if (signal?.aborted) return false;
+      try {
+        const response = await chatCompletionWithRetry({
+          messages: [...messages, reminder],
+          tools,
+          toolChoice: 'required',
+          signal,
+          skillContext
+        });
+        // 计费口径与主路径一致：usage 累加、calls 计数、渠道跟着实际端点走。
+        if (response?.usage) addUsage(session.usage, response.usage);
+        session.usage.calls += 1;
+        if (response?._usedApi) {
+          session.vendor = vendorOfConfig({ api: response._usedApi, providers: getConfig().providers }) || session.vendor;
+        }
+        const call = (response?.message?.tool_calls || []).find((c) => c?.function?.name === 'send_message');
+        if (!call) continue;
+        const before = session.sent.length;
+        // 直接走 executeTool：send_message 内部会 sendTextBatch（限频/分条/存档）
+        // 并写 session.sent。跳过 before-tool 钩子是有意的 —— 这一步是"发出必发的那条"，
+        // 钩子的否决权会把它变回静默，与本功能的目的冲突。
+        await executeTool(toolDefs, ctx, 'send_message', call.function?.arguments ?? '{}');
+        if (session.sent.length > before) return true;
+      } catch (error) {
+        skillManager.recordError('reply-safety', `私聊强制补发第 ${i + 1} 次失败：${error?.message ?? error}`);
+        if (error?.name === 'AbortError' || signal?.aborted) return false;
+      }
+    }
+    return false;
   }
 
   async #runAgent(session, { kind, chatId, chatKey, triggerEntries, proactive, seq, contextLimit = null, tierInfo = null, activeTopic = null }) {
@@ -923,6 +988,13 @@ export class Orchestrator {
     const maxRounds = Math.max(1, Number(cfg.api.maxRounds) || 12);
     let finish = false;
     let webSearchCount = 0;
+    // ── 私聊硬承诺 ──────────────────────────────────────────────────────
+    // 有人私聊找她（非主动机会）时，这一轮必须有一条消息出去。
+    // 群聊不设：群里"这轮不接话"是正常选项，靠档位/参与度决定即可。
+    // 连 send_message 都不在工具表里（messaging 分类被关）时不设：兑现不了，也不该空跑。
+    // 具体三级兜底见下面的 !toolCalls.length 分支与循环结束后的 #forceSendPrivate。
+    const privateMustReply = kind === 'private' && !proactive && triggerEntries.length > 0
+      && toolDefs.some((d) => d.id === 'send_message');
     session.activity = '';
     session.webSearchCount = 0;
     const markActivity = (activity) => {
@@ -1088,9 +1160,38 @@ export class Orchestrator {
         //   · 模型真的说完了（文本只是思考，按设计不发 QQ）→ 正常结束
         //   · 模型不遵守工具协议，把要说的话写在了正文里 → 群友什么都收不到
         // 给回复安全网一次机会抢救后者（插件未启用时立刻返回空，行为完全不变）。
-        const rescued = await this.#rescueUnsentReply({
+        let rescued = await this.#rescueUnsentReply({
           rawContent, triggerEntries, session, skillContext
         });
+
+        // ── 私聊硬承诺：有人私聊找你，这一轮必须有一条消息出去 ──
+        // 插件不在时上面那步永远是空，这里自己兜。顺序按"最不打扰她"排：
+        //   ① 正文就是成稿 → 原句搬出去（不改写、不生成、不发第二次请求）
+        //   ② 正文不是成稿（空 / 内心戏 / 计划腔）→ 提醒她一次，让她自己用工具说
+        //   ③ 还不行 → 循环结束后 #forceSendPrivate 强制补发
+        // 判"是不是成稿"的规则在 src/private-reply.js（纯函数、有单测）。
+        if (!rescued.length && privateMustReply && session.sent.length === 0 && !session.privateReplyFixed) {
+          const body = String(rawContent || '').trim();
+          const salvageable = body && !looksLikePlanningText(body) && !looksLikeInnerThought(body);
+          const fallbackMessages = salvageable ? splitReplyForFallback(body) : [];
+          if (fallbackMessages.length) {
+            session.privateReplyFixed = 'salvaged';
+            session.finishReason = session.finishReason || '私聊兜底：正文原句补发';
+            rescued = [{
+              id: `private_salvage_${Date.now().toString(36)}`,
+              type: 'function',
+              function: { name: 'send_message', arguments: JSON.stringify({ messages: fallbackMessages }) }
+            }];
+          } else if (!session.privateReplyNudged) {
+            session.privateReplyNudged = true;
+            messages.push({ role: 'user', content: PRIVATE_NUDGE });
+            markActivity('正在补发私聊回复…');
+            this.sessions.update(session.id);
+            this.emit('session-update', session.id);
+            continue;
+          }
+        }
+
         if (!rescued.length) break;
 
         toolCalls = rescued;
@@ -1221,6 +1322,10 @@ export class Orchestrator {
         }
       }
 
+      // 私聊兜底补发：这条 send_message 是合成的，发完就收工。
+      // 不必再问模型一轮 —— 它下一条大概率只会说"好的"（形如客服腔，还会多发一条）。
+      if (session.privateReplyFixed === 'salvaged' && session.sent.length > 0) finish = true;
+
       // ── 本地小模型的收尾策略（reply-safety 插件，默认关闭）──
       // 一批"只发送、不遗留待办"的工具结果之后允许提前结束，省掉没有意义的下一轮
       // （本地小模型多跑一轮既慢又容易把已说好的话改坏）。
@@ -1253,6 +1358,32 @@ export class Orchestrator {
       // 媒体消息跟随在全部 tool 结果之后（OpenAI 校验要求每个 tool_call 都有对应 tool 消息）
       messages.push(...imageUserMessages);
       // 给 UI 的简化消息流（跳过纯 tool 结果的重复展示）
+    }
+
+    // ── 私聊硬承诺的最后一道 ────────────────────────────────────────────
+    // 走到这里还一条没发、又是私聊有人找：要么模型整轮只调了 finish（"我不说"），
+    // 要么正文是内心戏被上面两道闸拦下了。私聊里这两种都等于"已读不回"，
+    // 所以把工具集砍到只剩 send_message，逼它必须给出一句话。
+    if (privateMustReply && session.sent.length === 0 && !session.error && !abortSignal.aborted && !this.aborted) {
+      try {
+        const forced = await this.#forceSendPrivate({
+          session, messages, ctx, toolDefs, skillContext, signal: abortSignal
+        });
+        if (forced) {
+          session.finishReason = session.finishReason || '私聊兜底：强制补发一条';
+        } else {
+          // 连强制补发都没成（接口挂了 / 模型死活不发）。这时候不能留一个
+          // "未回复"的假象让她背锅：标成 error —— 会话页会出现「重试」按钮，
+          // 触发消息也能重新进入未读，人工还能补救一次。
+          session.error = session.error || '私聊兜底失败：模型未能发出任何消息';
+          skillManager.recordError('reply-safety', '私聊兜底失败：强制补发也没能发出消息（接口异常或模型持续拒绝发言）');
+        }
+        markActivity('');
+        this.sessions.update(session.id);
+        this.emit('session-update', session.id);
+      } catch (error) {
+        skillManager.recordError('reply-safety', `私聊强制补发异常：${error?.message ?? error}`);
+      }
     }
 
     // 收尾：发过话 = done；没发 = noreply（这是正常选项）
